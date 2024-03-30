@@ -16,21 +16,22 @@
 **** The "Forward" button makes the bot forward the message to the admin.
 ** User opens the bot using a link.
 ** User click the "Start" button.
-** Bot sends a greeting and instructions.
-** Bot displays a menu with buttons.
+** Bot sends a greeting, instructions and a prompt for the user's real name.
+** After receiving a reply from the user the bot sends a message with the received name and buttons "Continue" and "Change".
+*** The "Change" button sends a prompt again.
+** After the user set the real name the bot displays a menu with buttons.
 *** Unlock lessons
 **** Bot sends a message with an instruction and a list of lessons.
-**** Each lesson in the list has a number bold title, description with a link to a video teaser and a price.
+**** Each lesson in the list has a number, bold title, description with a link to a video teaser and a price.
 **** Bot sends a message with a prompt for the lesson number and a button "Cancel".
 **** If the user sends an invalid input, bot replies to it with an instruction and a button "Cancel".
-**** Bot sends a message with a lesson description, a video instruction on how to pay and a button "Pay online".
-**** User clicks the Pay button.
-**** A payment service opens in the browser.
+**** Bot sends a message with a lesson description, a video instruction on how to pay and buttons "Pay online" and "Cancel".
+**** After clicking the "Pay" button a payment service opens in the browser.
 **** Bot sends a message "Waiting for payment" and a button "Cancel the payment".
-***** User successfully completes the payment.
+***** If the user successfully completes the payment.
 ****** Bot sends a message with a receipt and a link to the lesson.
 ****** Bot sends the admin a notification with the user name, receipt and the lesson title.
-***** Payment fails.
+***** If the payment fails.
 ****** Bot sends a message indicating the failure reason and buttons "Try again" and "Cancel".
 ******* The "Try again" button acts as if the user clicked the "Unlock" link for the lesson.
 ******* The "Cancel" button makes the bot send an acknowledgement message.
@@ -81,3 +82,84 @@
 *** If the admin enters the number of an unblocked user the bot sends the username with buttons "Block", "Pick another" and "Cancel".
 *** If the admin enters the number of a blocked user, the bot sends the username with buttons "Unblock", "Pick another" and "Cancel".
 
+* External services
+** Telegram
+*** HTTPS
+*** Auth using a Token
+*** Updates are received via long-polling
+*** To receive messages: GET "getUpdates"
+**** Parameters
+***** "offset": uint32, minimal value for "update_id" of returned updates. highest received "update_id" + 1.
+Have to remember the highest "update_id"
+***** "limit": uint32, max number of returned updates
+***** "timeout": uint32 seconds, how long to keep the request pending if there are no updates
+***** "allowed_updates": list of strings, only specified update types will be sent
+"message", "edited_message", "callback_query"
+**** Result
+***** A JSON list of Update objects
+***** "update_id": uint32, unique identifier. Update identifiers start from a positive number and increase sequentially
+If there are no new updates for at least a week, then identifier of the next update will be chosen randomly instead of sequentially.
+***** Some Update types interesting to us (optional fields of the Update object):
+****** "message": Message, a message was sent by a user
+****** "edited_message": Message
+****** "callback_query": CallbackQuery, an inline keyboard button was pressed
+*** To send messages or add/remove the keyboard: POST sendMessage
+**** Parameters
+***** "chat_id": uint64
+***** "text": utf-8 string, 1-4096 characters after entities parsing
+***** "parse_mode": optional ascii string, enum: "MarkdownV2", "HTML", "Markdown"
+***** "link_preview_options": optional LinkPreviewOptions
+****** "is_disabled": optional bool
+****** "url": optional utf-8 string, url preview instead of the first on in the message
+****** "prefer_small_media": optional bool, is the media in the link preview is supposed to be shrunk
+****** "show_above_text": optional bool
+***** "protect_content": optional bool, protects the contents of the sent message from forwarding and saving
+***** "reply_parameters": optional ReplyParameters
+****** "message_id": uint32
+***** "reply_markup": optional InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove
+**** Result
+***** Sent Message object
+*** Objects
+**** All objects are transmited in JSON
+**** Message (only interesting fields)
+***** "message_id": uint32, unique id inside the "chat"
+***** "chat": Chat
+***** "from": User
+***** "text": optional utf-8 string
+***** "date": uint32, unix timestamp
+***** "reply_to_message": optional Message, this object will not contain "reply_to_message"
+***** "edit_date": optional uint32, unix timestamp
+**** Chat (interesting fields)
+***** "id": uint64
+**** User (interesting fields)
+***** "id": uint64
+***** "first_name": utf-8 string
+***** "last_name": utf-8 string
+***** "username": ascii string
+**** CallbackQuery
+***** "id": string (encoding unknown)
+***** "from": User
+***** "message": Message, message sent by the bot with the button
+In fact, it is MaybeInaccessibleMessage but we will make sure not to delete messages with buttons
+**** InlineKeyboardMarkup
+***** "inline_keyboard": list of lists of InlineKeyboardButton, each element of the first list represents a row
+****** Exactly one optional field must be used
+****** "text": utf-8 string
+****** "url": optional utf-8 string, opened when the button is pressed
+****** "callback_data": optional ascii string, 1-64 bytes
+**** ReplyKeyboardMarkup
+***** Buttons below the text input
+***** "keyboard": list of lists of KeyboardButton, each element of the first list represents a row
+****** "text": utf-8 string
+This will be sent after clicking
+***** "is_persistent": optional bool, always show the keyboard when the regular keyboard is hidden
+***** "resize_keyboard": optional bool, use an optimal height instead of the height of the regular keyboard
+***** "one_time_keyboard": optional bool, hide after the first use (can still be opened via a button)
+**** ReplyKeyboardRemove
+***** "remove_keyboard": bool, True
+** Youkassa
+*** Internet acquiring
+*** HTTPS
+*** Auth using a Shop-id and a Token
+*** Post and Delete requests have an idempotence key
+*** Updates are received using polling
