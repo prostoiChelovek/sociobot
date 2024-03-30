@@ -1,0 +1,83 @@
+* Overview
+** Sociobot is a Telegram bot.
+** It allows to select a lesson and pay to unlock it.
+** It lists links to unlocked lessons.
+** Admin can view stats, add new lessons or modify existing via the bot.
+** Admin is notified about the purchases.
+** There is only one admin.
+** All user interactions with the bot are in Russian.
+
+* User interaction
+** General rules
+*** Bot should remove a button if the user should not click it.
+*** Bot should mark a message with a reaction if it is out-of-date.
+*** If the user clicks an invalid button, bot should send an explaination.
+*** If the user sends a message to the bot, bot should reply with an explaination and a button "Forward to support".
+**** The "Forward" button makes the bot forward the message to the admin.
+** User opens the bot using a link.
+** User click the "Start" button.
+** Bot sends a greeting and instructions.
+** Bot displays a menu with buttons.
+*** Unlock lessons
+**** Bot sends a message with an instruction and a list of lessons.
+**** Each lesson in the list has a number bold title, description with a link to a video teaser and a price.
+**** Bot sends a message with a prompt for the lesson number and a button "Cancel".
+**** If the user sends an invalid input, bot replies to it with an instruction and a button "Cancel".
+**** Bot sends a message with a lesson description, a video instruction on how to pay and a button "Pay online".
+**** User clicks the Pay button.
+**** A payment service opens in the browser.
+**** Bot sends a message "Waiting for payment" and a button "Cancel the payment".
+***** User successfully completes the payment.
+****** Bot sends a message with a receipt and a link to the lesson.
+****** Bot sends the admin a notification with the user name, receipt and the lesson title.
+***** Payment fails.
+****** Bot sends a message indicating the failure reason and buttons "Try again" and "Cancel".
+******* The "Try again" button acts as if the user clicked the "Unlock" link for the lesson.
+******* The "Cancel" button makes the bot send an acknowledgement message.
+***** User clicked the "Cancel the payment" button.
+****** Bot sends an acknowledgement message.
+***** User does nothing for more than 1 hour.
+****** Bot sends a message asking if the user still interested with buttons "Yes" and "No".
+****** The "Yes" button makes the bot send a message with an instruction and a "Pay online" button with an updated link.
+****** The "No" button makes the bot send an acknowledgement message.
+*** My lessons (unlocked)
+**** Bot sends a message wtih an instruction and a list of lessons.
+**** Each lesson in the list has a bold title, description and a link to the content.
+*** Help
+**** Bot sends an instruction with a video and a link to a support chat.
+
+* Admin interaction
+** Admin is identified via a user name statically stored in the bot configuration.
+** Admin has all the menu buttons that a regular user has.
+** Admin is able to pay for a lesson for debugging purposes.
+** Besides the "Unlock" link, admin should be given a "Free unlock" link that acts as if a payment succeeded.
+** Button "Add a lesosn"
+*** Bot sends a message with instructions, prompt for the admin to send a title and a button "Cancel".
+*** After receiving a message from the admin, bot sends a message with the title, prompt for the description and buttons "Edit title" and "Cancel".
+*** The "Cancel" button sends a message asking for confirmation. If not confirmed, the previous prompt message is repeated.
+*** The "Edit title" button acts the same as the "Add a lesson" button but without instructions.
+*** After receiving the description, bot sends a message with the description, prompt for the link and buttons "Edit description", "Edit title" and "Cancel".
+*** The "Edit description" button acts as if the admin just sent the title reply.
+*** The "Edit title" button sends a prompt for title and a "Cancel" button. After receiving the title, the bot sends acts as if a description was just sent, but modifies the title.
+*** After receiving the link, the bot sends a message with the link it just received, a prompt for the price and buttons "Edit link", "Edit title", "Edit description" and "Cancel".
+*** After receiving the price, the bot sends a message with a lesson description as seen by users and buttons "Add", "Edit price", "Edit description", "Edit title", "Cancel".
+*** The "Add" button sends an acknowledgement message.
+** Button "Edit a lesson"
+*** Bot sends a message with a numbered lessons list as seen by the user and a prompt to pick a lesson number to edit.
+*** If the admin sends an invalid input, the bot replies to it with an instruction and a button "Cancel".
+*** After receiving a lesson number, the bot sends a lesson description as seen by the user and buttons "Edit title", "Edit description", "Edit link", "Edit price", "Cancel".
+*** The "Edit" buttons send a prompt and after receiving the input the bot sends an updated lesson description with the same "Edit" buttons but "Cancel" is replaced with "Done".
+*** The "Done" button sends an acknowledgement.
+*** If a price was lowered, the acknowledgement message has a button "Notify about the price" that sends a notification to all users who do not have the lesson unlocked. 
+** Button "Delete a lesson"
+*** Bot sends a message with a numbered lessons list as seen by the user and a prompt to pick a lesson number to delete as in the "Edit" command.
+*** After receiving a lesson number, the bot sends a lesson description as seen by the user and buttons "Delete", "Pick another" and "Cancel".
+*** The "Delete" button asks for confirmation.
+*** The "Pick another" acts the same way as the "Delete a lesson button" but without the sending the list.
+** Button "Statistics"
+*** Bot sends a list of lesson titles. For each title there is a list of user names who have the lesson unlocked.
+** Button "Block forwards"
+*** The bot sends a numbered list of user names who have ever used the "Forward to support" button together with a status - "Not blocked" or "Blocked".
+*** If the admin enters the number of an unblocked user the bot sends the username with buttons "Block", "Pick another" and "Cancel".
+*** If the admin enters the number of a blocked user, the bot sends the username with buttons "Unblock", "Pick another" and "Cancel".
+
