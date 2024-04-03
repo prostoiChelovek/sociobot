@@ -86,8 +86,9 @@
 ** Telegram
 *** HTTPS
 *** Auth using a Token
+*** Rate limit for messages is 1 per second for one chat and 30/s total
 *** Updates are received via long-polling
-*** To receive messages: GET "getUpdates"
+*** Receive messages: GET "getUpdates"
 **** Parameters
 ***** "offset": uint32, minimal value for "update_id" of returned updates. highest received "update_id" + 1.
 Have to remember the highest "update_id"
@@ -103,7 +104,7 @@ If there are no new updates for at least a week, then identifier of the next upd
 ****** "message": Message, a message was sent by a user
 ****** "edited_message": Message
 ****** "callback_query": CallbackQuery, an inline keyboard button was pressed
-*** To send messages or add/remove the keyboard: POST sendMessage
+*** Send messages or add/remove the keyboard: POST sendMessage
 **** Parameters
 ***** "chat_id": uint64
 ***** "text": utf-8 string, 1-4096 characters after entities parsing
@@ -119,6 +120,36 @@ If there are no new updates for at least a week, then identifier of the next upd
 ***** "reply_markup": optional InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove
 **** Result
 ***** Sent Message object
+*** Edit message text: POST editMessageText
+**** Parameters
+***** "chat_id": uint64
+***** "message_id": uint32
+***** "text": utf-8 string, 1-4096 characters after entities parsing
+***** "parse_mode": optional ascii string, enum: "MarkdownV2", "HTML", "Markdown"
+***** "link_preview_options": optional LinkPreviewOptions
+****** "is_disabled": optional bool
+****** "url": optional utf-8 string, url preview instead of the first on in the message
+****** "prefer_small_media": optional bool, is the media in the link preview is supposed to be shrunk
+****** "show_above_text": optional bool
+***** "reply_markup": optional InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove
+*** Edit message markup: POST editMessageReplyMarkup
+**** Parameters
+***** "chat_id": uint64
+***** "message_id": uint32
+***** "reply_markup": optional InlineKeyboardMarkup or ReplyKeyboardMarkup or ReplyKeyboardRemove
+*** Delete a message : POST deleteMessage
+**** A message can only be deleted if it was sent less than 48 hours ago.
+**** Parameters
+***** "chat_id": uint64
+***** "message_id": uint32
+*** Forward message: POST forwardMessage
+**** Parameters
+***** "chat_id": uint64, target chat
+***** "from_chat_id": uint64
+***** "message_id": uint32
+***** "disable_notification": optional bool, user will receive notification without sound
+**** Result
+Sent Message
 *** Objects
 **** All objects are transmited in JSON
 **** Message (only interesting fields)
@@ -163,3 +194,115 @@ This will be sent after clicking
 *** Auth using a Shop-id and a Token
 *** Post and Delete requests have an idempotence key
 *** Updates are received using polling
+*** Create a payment: POST payments
+**** Parameters
+***** "amount": object, additional commission is not included in this amount
+****** "value": ascii string: number with a dot decimal separator
+****** "currency": ascii string: "RUB", ISO-4217
+***** "description: optional utf-8 string, up to 128 chars, and shown to the user during checkout
+***** "receipt": object
+****** "customer": object
+******* "email": utf-8 string, can be replaced with "phone", used to send a receipt
+******* "phone": ascii string, can be replaced with "email", ITU-T E.164, 
+******* "full_name": optional utf-8 string, up to 256 chars
+****** "items": list of object, up to 6 items for self-employed
+******* "description": utf-8 stirng, up to 128 chars
+******* "amount": object
+******** "value": ascii string: number with a dot decimal separator
+******** "currency": ascii string: "RUB", ISO-4217
+******* "vat_code": uint8, 1-6, for self-employed should be "1"
+******* "quantity": ascii string, nonzero uint
+******* "measure": ascii string, enum, will use "piece"
+******* "payment_subject": ascii string, enum, will use "commodity"
+******* "payment_mode": ascii string, enum, will use "full_payment"
+***** "capture": bool, false for two-stage payment
+***** "metadata": optional object, up to 16 keys, max key length is 32 chars, value: utf-8 string up to 512 chars
+**** Result
+Payment object
+*** Capture a payment: POST payments/{payment_id}/capture
+**** Can only be used for payments in state "waiting_for_capture"
+**** Payment status will become "succeeded" on success
+**** Result
+Actual Payment object
+*** Cancel a payment: POST payments/{payment_id}/cancel
+**** Can only be used for payments in state "waiting_for_capture"
+**** Result
+Actual Payment object
+*** Create a receipt: POST receipts
+**** Parameters
+***** "type": ascii string, enum "payment", "refund"
+***** "payment_id": ascii string: 36 chars
+***** "customer": object
+****** "email": utf-8 string, can be replaced with "phone", used to send a receipt
+****** "phone": ascii string, can be replaced with "email", ITU-T E.164, 
+****** "full_name": optional utf-8 string, up to 256 chars
+***** "items": list of object, up to 6 items for self-employed
+****** "description": utf-8 stirng, up to 128 chars
+****** "amount": object
+******* "value": ascii string: number with a dot decimal separator
+******* "currency": ascii string: "RUB", ISO-4217
+****** "vat_code": uint8, 1-6, for self-employed should be "1"
+****** "quantity": ascii string, nonzero uint
+****** "measure": ascii string, enum, will use "piece"
+****** "payment_subject": ascii string, enum, will use "commodity"
+****** "payment_mode": ascii string, enum, will use "full_payment"
+***** "send": bool, should always be "true"
+***** "settlements": list of object
+****** "type": ascii string, enum, will use "cashless"
+****** "amount": object
+******* "value": ascii string: number with a dot decimal separator
+******* "currency": ascii string: "RUB", ISO-4217
+**** Result
+Receipt object
+*** Payment lifecycle
+**** "pending": payment is created and awaiting user actions. Next states: "succeeded", "waiting_for_capture", "canceled"
+**** "waiting_for_capture": payment is made, authorized and waiting for us to request an actual transfer (to capture). Next states: "succeeded", "canceled"
+**** "succeeded": funds will be transfered to us, final status
+**** "canceled": final status
+*** Objects
+**** Payment
+***** "id": ascii string: 36 chars
+***** "status": ascii string: enum "pending", "waiting_for_capture", "succeeded", "canceled"
+***** "amount": object, additional commission is not included in this amount
+****** "value": ascii string: number with a dot decimal separator
+****** "currency": ascii string: "RUB", ISO-4217
+***** "description: optional utf-8 string, up to 128 chars, and shown to the user during checkout
+***** "recipient": object
+****** "account_id": ascii string
+****** "gateway_id": ascii string, subaccount's ID. Used for separating payment flows within one account
+***** "payment_method": optional object
+****** "type": ascii string, payment method code
+****** "id": ascii string
+****** "saved": bool
+****** "title": optional utf-8 string
+***** "created_at": ascii string, UTC, ISO 8601
+***** "captured_at": optional ascii string, UTC, ISO 8601
+***** "expires_at": optional ascii string, UTC, ISO 8601, up to this time a payment can be cancelled free of charge.
+if payment has status "waiting_for_capture" it will be automatically cancelled at this time
+***** "test": bool, is a test operation
+***** "paid": bool
+***** "refundable": bool
+***** "receipt_registration": optional bool, enum "pending", "succeeded", "canceled"
+present if automatic sending of receipts to the tax service is enabled
+***** "metadata": optional object, up to 16 keys, max key length is 32 chars, value: utf-8 string up to 512 chars
+***** "cancellation_details": optional object, comment to the "cancelled" status
+****** "party": ascii string, enum "yoo_money", "payment_network", "merchant"
+****** "reason": ascii string, enum
+https://yookassa.ru/developers/payment-acceptance/after-the-payment/declined-payments#cancellation-details-reason
+***** "authorization_details": optional object
+****** "three_d_secure": object, data about auth with 3‑D Secure
+******* "applied": bool, true - Youkass displayed a 3-D form, false - paid without 3-D
+****** "rrn": optional ascii string, Retrieval Reference Number, present if paid with a debit card
+****** "auth_code": optional ascii stirng, present for debit card payments
+**** Receipt
+***** "id": ascii string, 39 chars
+***** "type": ascii string, enum "payment", "refund"
+***** "payment_id": ascii string: 36 chars
+***** "status": ascii string, enum "pending", "succeeded", "canceled"
+***** "items": object, see "items" in Parameters of "Create a payment"
+***** "fiscal_document_number": optional ascii string
+***** "fiscal_storage_number": optional ascii string
+***** "fiscal_attribute": optional ascii string
+***** "registered_at": optional ascii string, ISO 8601
+***** "fiscal_provider_id": optional ascii string, receipt id in the online sales register
+
