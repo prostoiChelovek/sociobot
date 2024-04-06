@@ -305,4 +305,20 @@ https://yookassa.ru/developers/payment-acceptance/after-the-payment/declined-pay
 ***** "fiscal_attribute": optional ascii string
 ***** "registered_at": optional ascii string, ISO 8601
 ***** "fiscal_provider_id": optional ascii string, receipt id in the online sales register
+*** Errors
+**** Error object
+***** Returned for HTTP codes 400, 401, 403, 404, 429 and 500
+***** "type": ascii string, always "error"
+***** "id": ascii string, use for tech support
+***** "code": ascii string, enum "invalid_request", "invalid_credentials", "forbidden", "not_found", "too_many_requests", "internal_server_error"
+***** "description": ascii string
+***** "parameter": optional ascii string, header or parameter that caused the error
+**** HTTP 400: invalid_request, error in request syntax or logic, new idempotence key
+**** HTTP 401: invalid_credentials, old or new idempotence key
+**** HTTP 403: forbidden, not enough permissions for an operation, new idempotence key
+**** HTTP 404: not_found, resource not found, new idempotence key
+**** HTTP 405: incorrect HTTP method, no Error object, description in the "Reason-Phrase" header, new idempotence key
+**** HTTP 415: invalid "Content-type" for POST, no Error object, description in the "Reason-Phrase" header, new idempotence key
+**** HTTP 429: too_many_requests, old idempotence key
+**** HTTP 500: internal_server_error, request may or may not be successful, repeat request with same idempotence key
 
