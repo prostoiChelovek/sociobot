@@ -82,6 +82,40 @@
 *** If the admin enters the number of an unblocked user the bot sends the username with buttons "Block", "Pick another" and "Cancel".
 *** If the admin enters the number of a blocked user, the bot sends the username with buttons "Unblock", "Pick another" and "Cancel".
 
+* Configuration
+** Text files with key value pairs and comments
+** Loaded once during startup
+** Should be in $PWD
+** Credentials
+*** Stored in a separate file
+*** Filen name: "cre.dat". Name should not contain words like "credentials" to protect against automated attacks
+*** Deobfuscated file content should be in ascii
+*** Key and value are on the same line
+*** Key-value separator is ":". Spaces before and after ":" are ignored.
+*** Values are enclosed in double quotes. Everything inside quotes is treated literally
+*** All content is obfuscated be bitwise negating to protect against automated attacks that rely on patterns
+*** Line is a comment if "#" is at position 0
+*** There should be a program for editing the file
+** Text
+*** Strings for messages in russian
+*** File name: "text.txt"
+*** Keys: ascii, values: utf-8, comments: ascii
+*** Strings are multiline
+*** Strings are formatted with Telegram markdownV2
+*** Strings contain substitution variables starting with "$" ("$$" is literal "$")
+*** Variables are substituted only once. "$" in variable values is inserted literally
+*** Program will not start if there are undefined variables. List of variables depend on a key
+*** Strings start with "<" and end with ">". "<" and ">" are escaped as "\<" and "\>"
+*** First newline after "<" is ignored". First newline before ">" is ignored
+*** Keys end with ":". Spaces before ":" are ignored
+*** Line is a comment if a "#" is at position 0 and it is not inside string. There are no comments inside strings
+** Settings
+*** File name: "settings.txt"
+*** All content is in ascii
+*** Key and value are on the same line
+*** Key-value separator is ":". Spaces before and after ":" are ignored. Values cannot contain spaces
+*** Line is a comment if "#" is at position 0
+
 * External services
 ** Telegram
 *** HTTPS
