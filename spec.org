@@ -82,6 +82,100 @@
 *** If the admin enters the number of an unblocked user the bot sends the username with buttons "Block", "Pick another" and "Cancel".
 *** If the admin enters the number of a blocked user, the bot sends the username with buttons "Unblock", "Pick another" and "Cancel".
 
+* Modules
+** "tg": Telegram
+*** Credentials
+**** "cred_tg_token"
+*** Data
+**** "tg_chat": Chat handle
+***** "tg_chat_id": telegram id as unit64
+***** "tg_chat_name": get first_name and last_name as an utf-8 string (joined with space). May be out of date. Updated with received messages
+***** "tg_chat_username": get username as an ascii string. May be out of date. Updated with received messages
+**** "tg_msg": Message handle
+***** "tg_msg_is_delivered": true after "ev_tg_sent"
+***** "tg_msg_is_failed": true after "ev_tg_send_fail"
+***** "tg_msg_is_deleted": true after "ev_tg_msg_deleted"
+***** "tg_msg_id": telegram id as uint32. Valid only if "tg_msg_is_delivered" and not "tg_msg_is_deleted"
+***** "tg_msg_chat": get "tg_chat"
+***** "tg_msg_text": get message content as an utf-8 string
+**** "tg_btn": Button handle (from message inline-markup)
+***** "tg_btn_is_delivered": true after "ev_tg_sent" for "tg_btn_msg"
+***** "tg_btn_is_deleted": true after "ev_tg_msg_btn_deleted" or "ev_tg_msg_deleted". false when not "tg_btn_is_delivered"
+***** "tg_btn_text": get button text as a utf-8 string
+***** "tg_btn_msg": get Message handle that this button belongs to
+**** "tg_reaction": single utf-8 emoji char of 4 bytes
+***** "tg_reaction_desc": get an ascii string like "<thumbs-up-react>"
+*** Events
+**** "ev_tg_msg": user sent a message
+**** "ev_tg_btn": user clicked a button
+**** "ev_tg_init": initialization completed after "tg_init"
+**** "ev_tg_stopped": module is ready to stop after "tg_stop_prep". "tg_stop" can be called safely
+**** "ev_tg_sent": message request was delivered to telegram after "tg_send_msg"
+**** "ev_tg_send_fail": impossible to send a message after "tg_send_msg". Module tries hard so likely it is network failure or api error
+**** "ev_tg_forwarded": after "tg_fwd_msg"
+**** "ev_tg_fwd_fail": after "tg_fwd_msg"
+**** "ev_tg_deleted": after "tg_del_msg"
+**** "ev_tg_del_fail": after "tg_del_msg"
+**** "ev_tg_reacted": after "tg_react_msg"
+**** "ev_tg_react_fail": after "tg_react_msg"
+**** "ev_tg_msg_updated": after "tg_msg_upd_text"
+**** "ev_tg_msg_upd_fail": after "tg_msg_upd_text"
+**** "ev_tg_btn_deleted": after "tg_msg_del_button"
+**** "ev_tg_btn_del_fail': after "tg_msg_del_button"
+*** Methods
+**** Each method here is bound to a module handle. There may be multiple handles
+**** "tg_init": start initialization of a module handle
+- Second call with same handle will fail unless "tg_stop" was called
+- Module will actually initialize after event "ev_tg_init"
+- Methods if called immediately after will fail. Exceptions: "tg_pollfds", "tg_update", "tg_events" - they will work normally
+**** "tg_stop_prep": signal the module to begin shutdown. "tg_pollfds" must be serviced, possibly multiple times
+**** "tg_stop": signal the module that the program is closing
+- Use only after event "ev_tg_stopped"
+- "tg_pollfds" and "tg_events" will be empty after this call
+- All other methods will fail
+- Call "tg_init" to use the module again
+**** "tg_events": get list of module specific events
+- Multiple calls will return same events before "tg_update"
+- Old events are removed after "tg_update"
+**** "tg_pollfds": get list of "pollfs" to watch for
+**** "tg_update": notify the "tg" module about result of "poll"
+**** "tg_send_msg": send message
+- Message is actually sent only after "ev_tg_sent"
+- Fails immediately if the target chat does not exist
+- "ev_tg_send_fail" if a message cannot be sent and further retries will certainly not help
+**** "tg_fwd_msg": forward message
+- Fails immediately if the source message or the target chat does not exist
+- Events: "ev_tg_forwarded", "ev_tg_fwd_fail"
+- "ev_tg_fwd_fail": no permissions for the target chat, network failure
+**** "tg_del_msg": delete message
+- Fails immediately if a message is older than 48 hours or was already deleted
+- Events: "ev_tg_deleted", "ev_tg_del_fail"
+**** "tg_react_msg": set a reaction to message
+- Fails immediately if the message does not exist
+- Events: "ev_tg_reacted", "ev_tg_react_fail"
+- Changes reaction if was already set
+**** "tg_msg_upd_text": set new message text
+- Fails immediately if the message does not exist
+- Events: "ev_tg_msg_updated", "ev_tg_msg_upd_fail"
+**** "tg_msg_del_button": remove a button from message reply-markup
+- Fails immediately if the button does not exist
+- Events: "ev_tg_btn_deleted", "ev_tg_btn_del_fail"
+*** Data storage
+**** All messages are stored persistently (sent or not)
+**** All chats are stored persistently (data may be outdated)
+**** Messages and chats are stored in file "$PWD/tg.dat"
+***** Key-value pairs separated with ":"
+***** Keys are ascii, values may be in utf-8
+***** Spaces around ":" are ignored
+***** Chat keys are in format "chat.<chat handle id>.<key>" where "<chat handle id>" corresponds to "tg_chat"
+***** Message keys are in format "msg.<msg handle id>.<key>" where "<msg handle id>" corresponds to "tg_msg"
+***** Button keys are in format "msg.<msg handle id>.btn.<btn handle id>.<key>" where "<btn handle id>" corresponds to "tg_btn"
+***** Other values are enclosed in double quotes. Everything inside quotes is treated literally
+***** Value for the ".text" is multiline
+***** ".text" starts with "<" and ends with ">". "<" and ">" are escaped as "\<" and "\>"
+***** First newline after "<" is ignored". First newline before ">" is ignored
+** "youkassa": YouKassa
+
 * Configuration
 ** Text files with key value pairs and comments
 ** Loaded once during startup
