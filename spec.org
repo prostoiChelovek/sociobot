@@ -181,14 +181,14 @@
 **** Messages and chats are stored in file "$PWD/tg.dat"
 ***** Key-value pairs separated with ":"
 ***** Keys are ascii, values may be in utf-8
-***** Spaces around ":" are ignored
+***** Spaces and tabs around ":" are ignored
 ***** Chat keys are in format "chat.<chat handle id>.<key>" where "<chat handle id>" corresponds to "tg_chat"
 ***** Message keys are in format "msg.<msg handle id>.<key>" where "<msg handle id>" corresponds to "tg_msg"
 ***** Button keys are in format "msg.<msg handle id>.btn.<btn handle id>.<key>" where "<btn handle id>" corresponds to "tg_btn"
-***** Other values are enclosed in double quotes. Everything inside quotes is treated literally
 ***** Value for the ".text" is multiline
 ***** ".text" starts with "<" and ends with ">". "<" and ">" are escaped as "\<" and "\>"
 ***** First newline after "<" is ignored". First newline before ">" is ignored
+***** Other values are enclosed in double quotes. Everything inside quotes is treated literally
 *** Example
 #+begin_src C
 sob_ev evs[228];
@@ -209,7 +209,7 @@ while (1) {
         case ev_tg_init_fail:
             goto fail;
         case ev_tg_msg:
-            tg_msg msg = tg_msg_from_ev(evs[i]);
+            tg_msg msg = tg_msg_from_ev(&evs[i]);
             tg_msg_to_send s_msg;
             tg_s_msg_set_chat(s_msg, tg_msg_chat(msg));
             tg_s_msg_set_text(s_msg, tg_msg_text(msg));
@@ -258,13 +258,166 @@ stopped:
 tg_stop(tg);
 exit(1);
 #+end_src
-** "youkassa": YouKassa
+** "yk": YouKassa
 *** Credentials
+**** "cred_yk_shop_id", "cred_yk_token"
 *** Data
+**** "yk_handle": Module handle
+**** "yk_payment": Payment handle
+***** "yk_pay_from_ev": get "yk_payment" from "sob_ev"
+***** "yk_pay_is_pending": true after "ev_yk_pay_started"
+***** "yk_pay_is_failed": true after "ev_yk_pay_fail"
+***** "yk_pay_id": ascii string, 36 chars, id in youkassa, valid after "ev_yk_pay_started"
+***** "yk_pay_url": ascii string, url to redirect the user to pay, valid if "yk_pay_is_pending" (max length - "yk_pay_url_len")
+***** "yk_pay_fail_desc": ascii string describing failure reason, valid if "yk_pay_is_failed" (max length - "yk_pay_fail_desc_len")
+***** "yk_pay_print": ascii string to use in logs (max length - "yk_pay_print_len")
+**** "yk_payment_req": Payment data to use with "yk_pay"
+***** "yk_r_pay_set_rub": set amount with uint16 for number of rubbbles and uint8 for kopek
+***** "yk_r_pay_set_desc": set description as an utf-8 string to be shown to the user during checkout, up to 128 chars
+***** "yk_r_pay_set_email": set user email for receipt as an ascii string (mandatory but can be replaced with "yk_r_pay_set_phone")
+***** "yk_r_pay_set_phone": set user phone for receipt as an ascii string (mandatory but can be replaced with "yk_r_pay_set_email")
+***** "yk_r_pay_set_name": set user fullname for receipt as an utf-8 string (mandatory)
+***** "yk_r_pay_add_item": add an item for receipt with utf-8 description (up to 128 chars) and amount as two ints for rubs and kopek, up to 6 items
 *** Events
+**** "ev_yk_init": initialization complete after "yk_init"
+**** "ev_yk_init_fail": initialization failed after "yk_init"
+**** "ev_yk_pay_wait_capture": a payment was authorized (state "waiting_for_capture") after "ev_yk_pay_started"
+**** "ev_yk_pay_fail": payment failed and it is invalid now after "ev_yk_pay_started"
+**** "ev_yk_pay_expired": payment was not completed on time and it is invalid now after "ev_yk_pay_started"
+**** "ev_yk_stopped": module is ready to stop after "yk_stop_prep"
+**** "ev_yk_pay_started": payment was sent to youkassa and is "pending" after "yk_pay"
+**** "ev_yk_pay_start_fail": impossible to start a payment after "yk_pay". likely a network failure
+**** "ev_yk_pay_captured": payment was captured and money is transfered after "yk_capture"
+**** "ev_yk_capture_fail": after "yk_capture"
+**** "ev_yk_canceled": after "yk_cancel"
+**** "ev_yk_cancel_fail": after "yk_cancel"
 *** Methods
+**** Each method here is bound to a module handle. There may be multiple handles
+**** "yk_init": start initialization of the module handle
+- Second call with same handle will do nothing unless "yk_stop" was called
+- Module will actually initialize after event "ev_yk_init"
+- Methods if called immediately after will fail. Exceptions: "yk_pollfds", "yk_update", "yk_events" - they will work normally
+**** "yk_stop_prep": begin module shutdown. "yk_pollfds" must be serviced, possibly multiple times
+**** "yk_stop": signal the module that the program is closing
+- Use only after event "ev_yk_stopped"
+- "yk_pollfds" and "yk_events" will be empty after this call
+- All other methods will fail
+- Call "yk_init" to use the module again
+**** "yk_events": get list of module specific events
+- Multiple calls will return same events before "yk_update"
+- Old events are removed after "yk_update"
+**** "yk_pollfds": get list of "pollfs" to watch for
+**** "yk_update": notify the module about result of "poll"
+**** "yk_pay": start a payment and return "yk_payment" handle using data from "yk_payment_req"
+- Payment is only actually started after "ev_yk_pay_started"
+- Events: "ev_yk_pay_started", "ev_yk_pay_start_fail"
+**** "yk_capture": capture a payment to actually transfer the money
+- Only valid after "ev_yk_pay_wait_capture"
+- Fails immediately after "yk_cancel" (even before "ev_yk_canceled" or after "ev_yk_cancel_fail")
+- Fails immediately after "ev_yk_pay_fail", "ev_yk_pay_expired"
+- Events: "ev_yk_pay_captured", "ev_yk_capture_fail"
+**** "yk_cancel": cancel a payment
+- Fails immediately after "yk_capture"
+- Fails immediately after "ev_yk_pay_fail", "ev_yk_pay_expired"
+- Events: "ev_yk_canceled", "ev_yk_cancel_fail"
 *** Data storage
+**** All payments are stored persistently (even not started and canceled)
+**** File: "$PWD/youkassa.dat"
+**** Key-value pairs separated with ":"
+**** Keys are ascii, values may be in utf-8
+**** Spaces and tabs around ":" are ignored
+**** Values are enclosed in double quotes. Everything inside quotes is treated literally
+**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to "yk_payment"
 *** Example
+#+begin_src C
+sob_ev evs[228];
+yk_handle yk;
+yk_init(yk);
+
+while (1) {
+    struct pollfd pollfds[42];
+    nfds_t nfds = yk_pollfds(yk, pollfds, 42);
+    poll(pollfds, nfds, 10000);
+    yk_update(yk, pollfds, nfds);
+    uint16_t n_evs = yk_events(yk, evs, 228);
+    for (int i = 0; i < n_evs; i++) {
+        switch (sob_ev_type(evs[i])) {
+        case ev_yk_init:
+            printf("init!\n");
+
+            yk_payment_req pay;
+            yk_r_pay_set_rub(pay, 4, 20);
+            yk_r_pay_set_desc(pay, "it's 4:20");
+            yk_r_pay_set_email(pay, "test@example.org");
+            yk_r_pay_set_name(pay, "John Doe");
+            yk_r_pay_add_item(pay, "grass", 4, 20);
+            yk_payment n_pay = yk_pay(yk, &pay);
+
+            char desc[yk_pay_print_len];
+            yk_pay_print(n_pay, desc);
+            printf("Created a payment: %s\n", desc);
+
+            break;
+        case ev_yk_init_fail:
+            fprintf(stderr, "init fail\n");
+            goto quit;
+        case ev_yk_pay_started:
+            yk_payment pay = yk_pay_from_ev(&evs[i]);
+            char desc[yk_pay_print_len];
+            char url[yk_pay_url_len];
+            yk_pay_url(pay, url);
+            yk_pay_print(pay, desc);
+            printf("Payment '%s': %s\n", desc, url);
+            break;
+        case ev_yk_pay_wait_capture:
+            yk_payment pay = yk_pay_from_ev(&evs[i]);
+            char desc[yk_pay_print_len];
+            yk_pay_print(pay, desc);
+            yk_pay_capture(pay);
+            printf("Capturing payment %s\n", desc);
+            break;
+        case ev_yk_pay_captured:
+            yk_payment pay = yk_pay_from_ev(&evs[i]);
+            char desc[yk_pay_print_len];
+            yk_pay_print(pay, desc);
+            printf("Payment captured: %s\n", desc);
+            goto quit;
+        case ev_yk_pay_fail:
+            yk_payment pay = yk_pay_from_ev(&evs[i]);
+            char p_desc[yk_pay_print_len];
+            char desc[yk_pay_fail_desc_len];
+            yk_pay_fail_desc(pay, desc);
+            yk_pay_print(pay, p_desc);
+            printf("Payment '%s' failed: %s\n", p_desc, desc);
+            goto quit;
+        case ev_yk_capture_fail:
+            fprintf(stderr, "Capture failed\n");
+            goto quit;
+        case ev_yk_pay_expired:
+            fprintf(stderr, "Expired\n");
+            goto quit;
+        }
+    }
+}
+
+quit:
+yk_stop_prep(yk);
+while (1) {
+    struct pollfd pollfds[42];
+    nfds_t nfds = yk_pollfds(yk, pollfds, 42);
+    poll(pollfds, nfds, 10000);
+    yk_update(yk, pollfds, nfds);
+    uint16_t n_evs = yk_events(yk, evs, 228);
+    for (int i = 0; i < n_evs; i++) {
+        switch (sob_ev_type(evs[i])) {
+        case ev_yk_stopped:
+            goto stopped;
+        }
+    }
+}
+stopped:
+yk_stop(yk);
+#+end_src
 
 * Configuration
 ** Text files with key value pairs and comments
@@ -433,6 +586,11 @@ This will be sent after clicking
 ******* "measure": ascii string, enum, will use "piece"
 ******* "payment_subject": ascii string, enum, will use "commodity"
 ******* "payment_mode": ascii string, enum, will use "full_payment"
+***** "confirmation": object, user confirmation scenario
+****** "type": ascii stirng, "redirect"
+****** "confirmation_url": ascii string, we should redirect user here to pay
+****** "return_url": ascii string, user will be redirected here after successful or failed payment, up to 2048 chars 
+****** "locale": optional ascii string, ui language, enum "ru_RU", "en_US"
 ***** "capture": bool, false for two-stage payment
 ***** "metadata": optional object, up to 16 keys, max key length is 32 chars, value: utf-8 string up to 512 chars
 **** Result
@@ -497,6 +655,10 @@ Receipt object
 ***** "captured_at": optional ascii string, UTC, ISO 8601
 ***** "expires_at": optional ascii string, UTC, ISO 8601, up to this time a payment can be cancelled free of charge.
 if payment has status "waiting_for_capture" it will be automatically cancelled at this time
+***** "confirmation": object, user confirmation scenario
+****** "type": ascii stirng, "redirect"
+****** "confirmation_url": ascii string, we should redirect user here to pay
+****** "return_url": optional ascii string, user will be redirected here after successful or failed payment, up to 2048 chars 
 ***** "test": bool, is a test operation
 ***** "paid": bool
 ***** "refundable": bool
