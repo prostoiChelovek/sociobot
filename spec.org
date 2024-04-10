@@ -83,21 +83,28 @@
 *** If the admin enters the number of a blocked user, the bot sends the username with buttons "Unblock", "Pick another" and "Cancel".
 
 * Modules
+** Events
+*** All modules use "sob_ev" for events
+**** "sob_ev_type": get type from enum "sob_ev_types"
+**** "sob_ev_data": get data as uint64_t. May be invalid for some types
 ** "tg": Telegram
 *** Credentials
 **** "cred_tg_token"
 *** Data
+**** "tg_handle": Module handle
 **** "tg_chat": Chat handle
 ***** "tg_chat_id": telegram id as unit64
 ***** "tg_chat_name": get first_name and last_name as an utf-8 string (joined with space). May be out of date. Updated with received messages
 ***** "tg_chat_username": get username as an ascii string. May be out of date. Updated with received messages
 **** "tg_msg": Message handle
+***** "tg_msg_from_ev": get msg handle from "sob_ev"
 ***** "tg_msg_is_delivered": true after "ev_tg_sent"
 ***** "tg_msg_is_failed": true after "ev_tg_send_fail"
 ***** "tg_msg_is_deleted": true after "ev_tg_msg_deleted"
 ***** "tg_msg_id": telegram id as uint32. Valid only if "tg_msg_is_delivered" and not "tg_msg_is_deleted"
 ***** "tg_msg_chat": get "tg_chat"
 ***** "tg_msg_text": get message content as an utf-8 string
+***** "tg_msg_print": description to use in logs as an ascii string (max length - "tg_msg_print_len")
 **** "tg_btn": Button handle (from message inline-markup)
 ***** "tg_btn_is_delivered": true after "ev_tg_sent" for "tg_btn_msg"
 ***** "tg_btn_is_deleted": true after "ev_tg_msg_btn_deleted" or "ev_tg_msg_deleted". false when not "tg_btn_is_delivered"
@@ -105,13 +112,21 @@
 ***** "tg_btn_msg": get Message handle that this button belongs to
 **** "tg_reaction": single utf-8 emoji char of 4 bytes
 ***** "tg_reaction_desc": get an ascii string like "<thumbs-up-react>"
+**** "tg_msg_to_send": Message object to use with "tg_send_msg"
+***** "tg_s_msg_set_chat": set target "tg_chat"
+***** "tg_s_msg_set_text": set text as an utf-8 string with markdownV2 formatting 
+***** "tg_s_msg_add_btn": add an inline keyboard button with given text as an utf-8 string
+***** "tg_s_msg_add_kb_btn": add a reply keyboard button with given text as an utf-8 string. Buttons will replace existing
+***** "tg_s_msg_remove_kb": remove reply keyboard. Previous and following calls to "tg_s_msg_add_kb_btn" will have no effect
 *** Events
 **** "ev_tg_msg": user sent a message
 **** "ev_tg_btn": user clicked a button
 **** "ev_tg_init": initialization completed after "tg_init"
+**** "ev_tg_init_fail": initialization failed after "tg_init"
 **** "ev_tg_stopped": module is ready to stop after "tg_stop_prep". "tg_stop" can be called safely
 **** "ev_tg_sent": message request was delivered to telegram after "tg_send_msg"
 **** "ev_tg_send_fail": impossible to send a message after "tg_send_msg". Module tries hard so likely it is network failure or api error
+- "tg_send_fail_desc": ascii string with event description (max length - "tg_send_fail_desc_len")
 **** "ev_tg_forwarded": after "tg_fwd_msg"
 **** "ev_tg_fwd_fail": after "tg_fwd_msg"
 **** "ev_tg_deleted": after "tg_del_msg"
@@ -124,8 +139,8 @@
 **** "ev_tg_btn_del_fail': after "tg_msg_del_button"
 *** Methods
 **** Each method here is bound to a module handle. There may be multiple handles
-**** "tg_init": start initialization of a module handle
-- Second call with same handle will fail unless "tg_stop" was called
+**** "tg_init": start initialization of a "tg_handle"
+- Second call with same handle will do nothing unless "tg_stop" was called
 - Module will actually initialize after event "ev_tg_init"
 - Methods if called immediately after will fail. Exceptions: "tg_pollfds", "tg_update", "tg_events" - they will work normally
 **** "tg_stop_prep": signal the module to begin shutdown. "tg_pollfds" must be serviced, possibly multiple times
@@ -139,7 +154,7 @@
 - Old events are removed after "tg_update"
 **** "tg_pollfds": get list of "pollfs" to watch for
 **** "tg_update": notify the "tg" module about result of "poll"
-**** "tg_send_msg": send message
+**** "tg_send_msg": send message "tg_msg_to_send"
 - Message is actually sent only after "ev_tg_sent"
 - Fails immediately if the target chat does not exist
 - "ev_tg_send_fail" if a message cannot be sent and further retries will certainly not help
@@ -174,7 +189,82 @@
 ***** Value for the ".text" is multiline
 ***** ".text" starts with "<" and ends with ">". "<" and ">" are escaped as "\<" and "\>"
 ***** First newline after "<" is ignored". First newline before ">" is ignored
+*** Example
+#+begin_src C
+sob_ev evs[228];
+tg_handle tg;
+tg_init(tg);
+
+while (1) {
+    struct pollfd pollfds[42];
+    nfds_t nfds = tg_pollfds(tg, pollfds, 42);
+    poll(pollfds, nfds, 10000);
+    tg_update(tg, pollfds, nfds);
+    uint16_t n_evs = tg_events(tg, evs, 228);
+    for (int i = 0; i < n_evs; i++) {
+        switch (sob_ev_type(evs[i])) {
+        case ev_tg_init:
+            printf("init!\n");
+            break;
+        case ev_tg_init_fail:
+            goto fail;
+        case ev_tg_msg:
+            tg_msg msg = tg_msg_from_ev(evs[i]);
+            tg_msg_to_send s_msg;
+            tg_s_msg_set_chat(s_msg, tg_msg_chat(msg));
+            tg_s_msg_set_text(s_msg, tg_msg_text(msg));
+            tg_send_msg_res res = tg_send_msg(tg, &s_msg);
+            if (tg_send_msg_res_ok(res)) {
+                tg_msg r_msg = tg_send_msg_res_ok_msg(res);
+                char msg_debug[tg_msg_print_len];
+                tg_msg_print(msg, msg_debug);
+                printf("enqueued message: '%s'\n", msg_debug);
+            } else if (tg_send_msg_res_fail(res)) {
+                fprintf(stderr,
+                    "tg_send_msg failed: '%s'\n",
+                    tg_send_msg_res_fail_desc(res));
+            } else { }
+            break;
+        case ev_tg_sent:
+            printf("echo delivered\n");
+            break;
+        case ev_tg_send_fail:
+            char desc[tg_send_fail_desc_len];
+            tg_send_fail_desc(evs[i], desc);
+            fprintf(stderr, "Failed to send echo: '%s'\n", desc);
+            goto fail;
+        default:
+            continue;
+        }
+    }
+}
+
+fail:
+tg_stop_prep(tg);
+while (1) {
+    struct pollfd pollfds[42];
+    nfds_t nfds = tg_pollfds(tg, pollfds, 42);
+    poll(pollfds, nfds, 10000);
+    tg_update(tg, pollfds, nfds);
+    uint16_t n_evs = tg_events(tg, evs, 228);
+    for (int i = 0; i < n_evs; i++) {
+        switch (sob_ev_type(evs[i])) {
+        case ev_tg_stopped:
+            goto stopped;
+        }
+    }
+}
+stopped:
+tg_stop(tg);
+exit(1);
+#+end_src
 ** "youkassa": YouKassa
+*** Credentials
+*** Data
+*** Events
+*** Methods
+*** Data storage
+*** Example
 
 * Configuration
 ** Text files with key value pairs and comments
