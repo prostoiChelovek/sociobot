@@ -294,6 +294,7 @@ exit(1);
 *** Methods
 **** Each method here is bound to a module handle. There may be multiple handles
 **** "yk_init": start initialization of the module handle
+- Events: "ev_yk_init", "ev_yk_init_fail"
 - Second call with same handle will do nothing unless "yk_stop" was called
 - Module will actually initialize after event "ev_yk_init"
 - Methods if called immediately after will fail. Exceptions: "yk_pollfds", "yk_update", "yk_events" - they will work normally
@@ -418,6 +419,84 @@ while (1) {
 stopped:
 yk_stop(yk);
 #+end_src
+** "les": Lessons storage
+*** Data
+**** "lessons": Module state
+**** "lesson": Lesson handle
+***** "lesson_enabled": true if it can be displayed to users and purchased
+***** "lesson_title": utf-8 string, max length - "les_title_len"
+***** "lesson_desc": utf-8 string, max length - "les_desc_len"
+***** "lesson_price": two uint - rub and kopek
+***** "lesson_pos": for sorting the list displayed to user, duplicates possible
+***** "lesson_print": ascii string to use in logs, max length - "lesson_print_len"
+**** "lesson_new": Lesson data for "les_add"
+***** "lesson_n_set_title": set "lesson_title"
+***** "lesson_n_set_desc": set "lesson_desc"
+***** "lesson_n_set_price": set "lesson_desc"
+***** "lesson_n_set_pos": set "lesson_pos"
+*** Events
+**** "ev_les_init": after "les_init"
+**** "ev_les_init_fail": after "les_init"
+**** "ev_les_stopped": "les_stop" can be called after "les_stop_prep"
+**** "ev_les_write_fail": change cannot be saved to disk, adding or modifying lessons is pointles
+**** "ev_les_disabled": lesson is disabled immediately after "les_disable" (no "les_update" required) but the change may not be saved to disk yet
+**** "ev_les_added": after "les_add"
+**** "ev_les_new_title": after "les_set_title"
+**** "ev_les_new_desc": after "les_set_desc"
+**** "ev_les_new_price": after "les_set_price"
+*** Methods
+**** "les_init": start initialization
+- Events: "ev_les_init", "ev_les_init_fail"
+- Second call will do nothing
+- Module will actually initialize after "ev_les_init"
+- Methods if called immediately after will fail. Exceptions: "les_pollfds", "les_update", "les_events" - they will work normally
+**** "les_stop_prep": begin module shutdown. "les_pollfds" must be serviced, possibly multiple times
+- Events: "ev_les_stoppped"
+**** "les_stop": signal the module that the program is closing
+- Use only after event "ev_les_stopped"
+- "les_pollfds" and "les_events" will be empty after this call
+- All other methods will fail
+- Call "les_init" to use the module again
+**** "les_events": get list of module specific events
+- Multiple calls will return same events before "les_update"
+- Old events are removed after "les_update"
+**** "les_pollfds": get list of "pollfs" to watch for
+**** "les_update": notify the module about result of "poll"
+**** "les_list": get list of enabled "lesson" that can be displayed to user
+- Max number of lessons - "les_list_len"
+- A returned "lesson" may become disabled after "les_disable"
+**** "les_add": create a lesson using "lesson_new" and return "lesson"
+- Events "ev_les_added", "ev_write_fail". Both may happen in that order
+- Adds a second lesson if called twice
+- New lesson will be listed in "les_list" immediately (before "les_update") even if it is not save to disk yet
+**** "les_disable": disable "lesson"
+- Events: "ev_les_disabled", "ev_les_write_fail". Both may happen in that order
+- No effect if already disabled
+- Effective immediately (before "les_update") even if the change is not saved to disk yet
+**** "les_set_title": edit "lesson_title"
+- Events: "ev_les_new_title", "ev_les_write_fail". Both may happen in that order
+- Effective immediately
+**** "les_set_desc": edit "lesson_desc"
+- Events: "ev_les_new_desc", "ev_les_write_fail". Both may happen in that order
+- Effective immediately
+**** "les_set_price": edit "lesson_price"
+- Events: "ev_les_new_price", "ev_les_write_fail". Both may happen in that order
+- Effective immediately
+*** Data storage
+**** File name: "$PWD/lessons.txt"
+**** Keys: ascii, values: utf-8
+**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to a "lesson" handle
+**** Keys end with ":". Spaces and tabs around ":" are ignored
+**** Description starts with "<" and end with ">". "<" and ">" are escaped as "\<" and "\>"
+**** Description is multiline and formatted with Telegram markdownV2
+**** First newline and spaces after "<" is ignored". First newline and spaces before ">" is ignored
+**** Other values are enclosed in double quotes. Everything inside quotes is treated literally
+** "acc": Accounts, list of unlocked Lessons for each user
+** "str": Strings storage
+** "cred": Credentials storage
+** "cfg": Configuration
+** "log": Logger
+** "bot": Main module
 
 * Configuration
 ** Text files with key value pairs and comments
