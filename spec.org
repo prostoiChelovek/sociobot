@@ -91,7 +91,7 @@
 *** Credentials
 **** "cred_tg_token"
 *** Data
-**** "tg_handle": Module handle
+**** "tg_mod": Module state
 **** "tg_chat": Chat handle
 ***** "tg_chat_id": telegram id as unit64
 ***** "tg_chat_name": get first_name and last_name as an utf-8 string (joined with space). May be out of date. Updated with received messages
@@ -138,9 +138,9 @@
 **** "ev_tg_btn_deleted": after "tg_msg_del_button"
 **** "ev_tg_btn_del_fail': after "tg_msg_del_button"
 *** Methods
-**** Each method here is bound to a module handle. There may be multiple handles
-**** "tg_init": start initialization of a "tg_handle"
-- Second call with same handle will do nothing unless "tg_stop" was called
+**** Each method here is bound to "tg_mod". There may be multiple instances
+**** "tg_init": start initialization of a "tg_mod"
+- Second call with same "tg_mod" will do nothing unless "tg_stop" was called
 - Module will actually initialize after event "ev_tg_init"
 - Methods if called immediately after will fail. Exceptions: "tg_pollfds", "tg_update", "tg_events" - they will work normally
 **** "tg_stop_prep": signal the module to begin shutdown. "tg_pollfds" must be serviced, possibly multiple times
@@ -192,15 +192,15 @@
 *** Example
 #+begin_src C
 sob_ev evs[228];
-tg_handle tg;
-tg_init(tg);
+tg_mod tg;
+tg_init(&tg);
 
 while (1) {
     struct pollfd pollfds[42];
-    nfds_t nfds = tg_pollfds(tg, pollfds, 42);
+    nfds_t nfds = tg_pollfds(&tg, pollfds, 42);
     poll(pollfds, nfds, 10000);
-    tg_update(tg, pollfds, nfds);
-    uint16_t n_evs = tg_events(tg, evs, 228);
+    tg_update(&tg, pollfds, nfds);
+    uint16_t n_evs = tg_events(&tg, evs, 228);
     for (int i = 0; i < n_evs; i++) {
         switch (sob_ev_type(evs[i])) {
         case ev_tg_init:
@@ -213,7 +213,7 @@ while (1) {
             tg_msg_to_send s_msg;
             tg_s_msg_set_chat(s_msg, tg_msg_chat(msg));
             tg_s_msg_set_text(s_msg, tg_msg_text(msg));
-            tg_send_msg_res res = tg_send_msg(tg, &s_msg);
+            tg_send_msg_res res = tg_send_msg(&tg, &s_msg);
             if (tg_send_msg_res_ok(res)) {
                 tg_msg r_msg = tg_send_msg_res_ok_msg(res);
                 char msg_debug[tg_msg_print_len];
@@ -240,13 +240,13 @@ while (1) {
 }
 
 fail:
-tg_stop_prep(tg);
+tg_stop_prep(&tg);
 while (1) {
     struct pollfd pollfds[42];
-    nfds_t nfds = tg_pollfds(tg, pollfds, 42);
+    nfds_t nfds = tg_pollfds(&tg, pollfds, 42);
     poll(pollfds, nfds, 10000);
-    tg_update(tg, pollfds, nfds);
-    uint16_t n_evs = tg_events(tg, evs, 228);
+    tg_update(&tg, pollfds, nfds);
+    uint16_t n_evs = tg_events(&tg, evs, 228);
     for (int i = 0; i < n_evs; i++) {
         switch (sob_ev_type(evs[i])) {
         case ev_tg_stopped:
@@ -255,14 +255,14 @@ while (1) {
     }
 }
 stopped:
-tg_stop(tg);
+tg_stop(&tg);
 exit(1);
 #+end_src
 ** "yk": YouKassa
 *** Credentials
 **** "cred_yk_shop_id", "cred_yk_token"
 *** Data
-**** "yk_handle": Module handle
+**** "yk_mod": Module state
 **** "yk_payment": Payment handle
 ***** "yk_pay_from_ev": get "yk_payment" from "sob_ev"
 ***** "yk_pay_is_pending": true after "ev_yk_pay_started"
@@ -292,10 +292,10 @@ exit(1);
 **** "ev_yk_canceled": after "yk_cancel"
 **** "ev_yk_cancel_fail": after "yk_cancel"
 *** Methods
-**** Each method here is bound to a module handle. There may be multiple handles
-**** "yk_init": start initialization of the module handle
+**** Each method here is bound to "yk_mod". There may be multiple instances
+**** "yk_init": start initialization of the module
 - Events: "ev_yk_init", "ev_yk_init_fail"
-- Second call with same handle will do nothing unless "yk_stop" was called
+- Second call with same "yk_mod" will do nothing unless "yk_stop" was called
 - Module will actually initialize after event "ev_yk_init"
 - Methods if called immediately after will fail. Exceptions: "yk_pollfds", "yk_update", "yk_events" - they will work normally
 **** "yk_stop_prep": begin module shutdown. "yk_pollfds" must be serviced, possibly multiple times
@@ -332,15 +332,15 @@ exit(1);
 *** Example
 #+begin_src C
 sob_ev evs[228];
-yk_handle yk;
-yk_init(yk);
+yk_mod yk;
+yk_init(&yk);
 
 while (1) {
     struct pollfd pollfds[42];
-    nfds_t nfds = yk_pollfds(yk, pollfds, 42);
+    nfds_t nfds = yk_pollfds(&yk, pollfds, 42);
     poll(pollfds, nfds, 10000);
-    yk_update(yk, pollfds, nfds);
-    uint16_t n_evs = yk_events(yk, evs, 228);
+    yk_update(&yk, pollfds, nfds);
+    uint16_t n_evs = yk_events(&yk, evs, 228);
     for (int i = 0; i < n_evs; i++) {
         switch (sob_ev_type(evs[i])) {
         case ev_yk_init:
@@ -352,7 +352,7 @@ while (1) {
             yk_r_pay_set_email(pay, "test@example.org");
             yk_r_pay_set_name(pay, "John Doe");
             yk_r_pay_add_item(pay, "grass", 4, 20);
-            yk_payment n_pay = yk_pay(yk, &pay);
+            yk_payment n_pay = yk_pay(&yk, &pay);
 
             char desc[yk_pay_print_len];
             yk_pay_print(n_pay, desc);
@@ -402,13 +402,13 @@ while (1) {
 }
 
 quit:
-yk_stop_prep(yk);
+yk_stop_prep(&yk);
 while (1) {
     struct pollfd pollfds[42];
-    nfds_t nfds = yk_pollfds(yk, pollfds, 42);
+    nfds_t nfds = yk_pollfds(&yk, pollfds, 42);
     poll(pollfds, nfds, 10000);
-    yk_update(yk, pollfds, nfds);
-    uint16_t n_evs = yk_events(yk, evs, 228);
+    yk_update(&yk, pollfds, nfds);
+    uint16_t n_evs = yk_events(&yk, evs, 228);
     for (int i = 0; i < n_evs; i++) {
         switch (sob_ev_type(evs[i])) {
         case ev_yk_stopped:
@@ -417,7 +417,7 @@ while (1) {
     }
 }
 stopped:
-yk_stop(yk);
+yk_stop(&yk);
 #+end_src
 ** "les": Lessons storage
 *** Data
@@ -497,7 +497,7 @@ yk_stop(yk);
 **** "yk": Data "yk_payment"
 **** "les": Data "lesson"
 *** Data
-**** "accounts": Module handle
+**** "accounts": Module state
 **** "account"
 ***** "account_lessons": list of unlocked "lesson" handles including deactivated ones, max length - "account_lessons_len"
 ***** "account_payments": list of all successful and pending payments for the account as "yk_payment", max length - "account_payments_len"
