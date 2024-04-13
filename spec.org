@@ -182,9 +182,17 @@
 ***** Key-value pairs separated with ":"
 ***** Keys are ascii, values may be in utf-8
 ***** Spaces and tabs around ":" are ignored
-***** Chat keys are in format "chat.<chat handle id>.<key>" where "<chat handle id>" corresponds to "tg_chat"
-***** Message keys are in format "msg.<msg handle id>.<key>" where "<msg handle id>" corresponds to "tg_msg"
-***** Button keys are in format "msg.<msg handle id>.btn.<btn handle id>.<key>" where "<btn handle id>" corresponds to "tg_btn"
+***** Chat keys are in format "chat.<key>"
+***** For each object there is a block of key-value pairs called a record
+***** Records are separated with one or more empty lines (stray spaces and tabs ignored)
+***** Different records can contain same keys
+***** Keys inside one record are unique
+***** Missing or extra keys produce an error 
+***** Each chat has a key "id" that corresponds to "tg_chat" ("chat.id")
+***** Message keys are in format "msg.<key>"
+***** Each message has a key "id" that corresponds to "tg_msg" ("msg.id")
+***** Button keys are in format "btn.<key>"
+***** Each button has a key "id" that corresponds to "tg_btn" ("btn.id")
 ***** Value for the ".text" is multiline
 ***** ".text" starts with "<" and ends with ">". "<" and ">" are escaped as "\<" and "\>"
 ***** First newline after "<" is ignored". First newline before ">" is ignored
@@ -328,7 +336,12 @@ exit(1);
 **** Keys are ascii, values may be in utf-8
 **** Spaces and tabs around ":" are ignored
 **** Values are enclosed in double quotes. Everything inside quotes is treated literally
-**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to "yk_payment"
+**** For each object there is a block of key-value pairs called a record
+**** Records are separated with one or more empty lines (stray spaces and tabs ignored)
+**** Different records can contain same keys
+**** Keys inside one record are unique
+**** Missing or extra keys produce an error 
+**** Each object has an "id" key that corresponds to "yk_payment"
 *** Example
 #+begin_src C
 sob_ev evs[228];
@@ -485,12 +498,17 @@ yk_stop(&yk);
 *** Data storage
 **** File name: "$PWD/lessons.txt"
 **** Keys: ascii, values: utf-8
-**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to a "lesson" handle
 **** Keys end with ":". Spaces and tabs around ":" are ignored
 **** Description starts with "<" and end with ">". "<" and ">" are escaped as "\<" and "\>"
 **** Description is multiline and formatted with Telegram markdownV2
 **** First newline and spaces after "<" is ignored". First newline and spaces before ">" is ignored
 **** Other values are enclosed in double quotes. Everything inside quotes is treated literally
+**** For each object there is a block of key-value pairs called a record
+**** Records are separated with one or more empty lines (stray spaces and tabs ignored)
+**** Different records can contain same keys
+**** Keys inside one record are unique
+**** Missing or extra keys produce an error 
+**** Each record contains an "id" key that corresponds to "lesson"
 ** "acc": Accounts, list of unlocked Lessons for each user
 *** Dependencies
 **** "tg": Data "tg_chat"
@@ -538,10 +556,15 @@ yk_stop(&yk);
 *** Data storage
 **** File name: "$PWD/acc.txt"
 **** Keys and values: ascii
-**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to an "account" handle
 **** Keys end with ":". Spaces and tabs around ":" are ignored
 **** Values are enclosed in double quotes. Everything inside quotes is treated literally
-**** Lists are in format 'key : "<first>", "<second>" , "<third>"'
+**** Lists are in format 'key : "<first>", "<second>" , "<third>"'. Trailing "," are allowed
+**** For each object there is a block of key-value pairs called a record
+**** Records are separated with one or more empty lines (stray spaces and tabs ignored)
+**** Different records can contain same keys
+**** Keys inside one record are unique
+**** Missing or extra keys produce an error 
+**** Each object has a key "id" that corresponds to "account"
 ** "str": Strings storage
 *** Data
 **** "str_p_%": a struct per each string for the matching "str_%" method, contains a field per a variable in the string
