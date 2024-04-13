@@ -492,45 +492,167 @@ yk_stop(yk);
 **** First newline and spaces after "<" is ignored". First newline and spaces before ">" is ignored
 **** Other values are enclosed in double quotes. Everything inside quotes is treated literally
 ** "acc": Accounts, list of unlocked Lessons for each user
+*** Dependencies
+**** "tg": Data "tg_chat"
+**** "yk": Data "yk_payment"
+**** "les": Data "lesson"
+*** Data
+**** "accounts": Module handle
+**** "account"
+***** "account_lessons": list of unlocked "lesson" handles including deactivated ones, max length - "account_lessons_len"
+***** "account_payments": list of all successful and pending payments for the account as "yk_payment", max length - "account_payments_len"
+*** Events
+**** "ev_acc_init": after "acc_init"
+**** "ev_acc_init_fail": after "acc_init"
+**** "ev_acc_stopped": after "acc_stop_prep"
+**** "ev_acc_new": account was created after "acc_new"
+**** "ev_acc_new_fail": after "acc_new"
+**** "ev_acc_les_unlocked": after "acc_unlock"
+**** "ev_acc_unlock_fail": after "acc_unlock"
+*** Methods
+**** "acc_init": start initialization
+- Events: "ev_acc_init", "ev_acc_init_fail"
+- Second call will do nothing
+- Module will actually initialize after "ev_acc_init"
+- Methods if called immediately after will fail. Exceptions: "acc_pollfds", "acc_update", "acc_events" - they will work normally
+**** "acc_stop_prep": begin module shutdown. "acc_pollfds" must be serviced, possibly multiple times
+- Events: "ev_acc_stoppped"
+**** "acc_stop": signal the module that the program is closing
+- Use only after event "ev_acc_stopped"
+- "acc_pollfds" and "acc_events" will be empty after this call
+- All other methods will fail
+- Call "acc_init" to use the module again
+**** "acc_events": get list of module specific events
+- Multiple calls will return same events before "acc_update"
+- Old events are removed after "acc_update"
+**** "acc_pollfds": get list of "pollfs" to watch for
+**** "acc_update": notify the module about result of "poll"
+**** "acc_acc_new": create an "account" for "tg_chat"
+- Events: "ev_acc_new", "ev_acc_new_fail"
+- Fails immediately if already exists
+- Does not return a handle, us "acc_from_tg"
+**** "acc_from_tg": get "account" handle for the user in "tg_chat"
+- Fails immediately if nonexistent
+**** "acc_unlock_les": adds a "lesson" to "account_lessons" and its "yk_payment" to "account_payments"
+- Events: "acc_les_unlocked", "acc_unlock_fail"
+*** Data storage
+**** File name: "$PWD/acc.txt"
+**** Keys and values: ascii
+**** Keys are in format "<handle id>.<key>" where "<handle id>" corresponds to an "account" handle
+**** Keys end with ":". Spaces and tabs around ":" are ignored
+**** Values are enclosed in double quotes. Everything inside quotes is treated literally
+**** Lists are in format 'key : "<first>", "<second>" , "<third>"'
 ** "str": Strings storage
+*** Data
+**** "str_p_%": a struct per each string for the matching "str_%" method, contains a field per a variable in the string
+- Struct fields may be used directly instead of accessor methods
+*** Events
+**** "ev_str_init": after "str_init"
+**** "ev_str_init_fail": after "str_init"
+**** "ev_str_stopped": after "str_stop_prep"
+*** Methods
+**** "str_init": start initialization
+- Events: "ev_str_init", "ev_str_init_fail"
+- Second call will do nothing
+- Module will actually initialize after "ev_str_init"
+- Methods if called immediately after will fail. Exceptions: "str_pollfds", "str_update", "str_events" - they will work normally
+**** "str_stop_prep": begin module shutdown. "str_pollfds" must be serviced, possibly multiple times
+- Events: "ev_str_stoppped"
+**** "str_stop": signal the module that the program is closing
+- Use only after event "ev_str_stopped"
+- "str_pollfds" and "str_events" will be empty after this call
+- All other methods will fail
+- Call "str_init" to use the module again
+**** "str_events": get list of module specific events
+- Multiple calls will return same events before "str_update"
+- Old events are removed after "str_update"
+**** "str_pollfds": get list of "pollfs" to watch for
+**** "str_update": notify the module about result of "poll"
+**** "str_%": method per each string, takes "str_p_%" if the string has variables
+*** Data storage
+**** File name: "$PWD/str.txt"
+**** Keys: ascii, values: utf-8, comments: ascii
+**** Strings are multiline
+**** Strings are formatted with Telegram markdownV2
+**** Strings contain substitution variables starting with "$" ("\$" for literal "$")
+**** Variables are substituted only once. "$" in variable values is inserted literally
+**** Program will not start if there are undefined variables. List of variables depend on a key
+**** Strings start with "<" and end with ">". "<" and ">" are escaped as "\<" and "\>"
+**** First newline after "<" is ignored". First newline before ">" is ignored
+**** Keys end with ":". Spaces before ":" are ignored
+**** Line is a comment if a "#" is at position 0 and it is not inside string. There are no comments inside strings
 ** "cred": Credentials storage
+*** Data
+*** Events
+**** "ev_cred_init": after "cred_init"
+**** "ev_cred_init_fail": after "cred_init"
+**** "ev_cred_stopped": after "cred_stop_prep"
+*** Methods
+**** "cred_init": start initialization
+- Events: "ev_cred_init", "ev_cred_init_fail"
+- Second call will do nothing
+- Module will actually initialize after "ev_cred_init"
+- Methods if called immediately after will fail. Exceptions: "cred_pollfds", "cred_update", "cred_events" - they will work normally
+**** "cred_stop_prep": begin module shutdown. "cred_pollfds" must be serviced, possibly multiple times
+- Events: "ev_cred_stoppped"
+**** "cred_stop": signal the module that the program is closing
+- Use only after event "ev_cred_stopped"
+- "cred_pollfds" and "cred_events" will be empty after this call
+- All other methods will fail
+- Call "cred_init" to use the module again
+**** "cred_events": get list of module specific events
+- Multiple calls will return same events before "cred_update"
+- Old events are removed after "cred_update"
+**** "cred_pollfds": get list of "pollfs" to watch for
+**** "cred_update": notify the module about result of "poll"
+**** "cred_tg_token": ascii string for "tg", max length - "cred_tg_token_len"
+**** "cred_yk_shop_id": ascii string for "yk", max length - "cred_yk_shop_id_len" 
+**** "cred_yk_token": ascii string for "yk", max length - "cred_yk_token_len" 
+*** Data storage
+**** Filen name: "$PWD/cre.dat". Name should not contain words like "credentials" to protect against automated attacks
+**** Deobfuscated file content should be in ascii
+**** Key and value are on the same line
+**** Key-value separator is ":". Spaces and tabs before and after ":" are ignored.
+**** Values are enclosed in double quotes. Everything inside quotes is treated literally
+**** All content is obfuscated by bitwise negating to protect against automated attacks that rely on patterns
+**** Line is a comment if "#" is at position 0
+**** There should be a program for editing the file
 ** "cfg": Configuration
+*** Data
+**** "cfg": Module state
+*** Methods
+**** "cfg_%": a method per value, return type depends on value, max length should be specified for all strings and lists as "cfg_%_len"
 ** "log": Logger
+*** Data
+**** "log": Module state
+*** Methods
+**** "log_err", "log_warn", "log_info", "log_debug", "log_trace": parameters as in "printf(3)"
 ** "bot": Main module
-
-* Configuration
-** Text files with key value pairs and comments
-** Loaded once during startup
-** Should be in $PWD
-** Credentials
-*** Stored in a separate file
-*** Filen name: "cre.dat". Name should not contain words like "credentials" to protect against automated attacks
-*** Deobfuscated file content should be in ascii
-*** Key and value are on the same line
-*** Key-value separator is ":". Spaces before and after ":" are ignored.
-*** Values are enclosed in double quotes. Everything inside quotes is treated literally
-*** All content is obfuscated be bitwise negating to protect against automated attacks that rely on patterns
-*** Line is a comment if "#" is at position 0
-*** There should be a program for editing the file
-** Text
-*** Strings for messages in russian
-*** File name: "text.txt"
-*** Keys: ascii, values: utf-8, comments: ascii
-*** Strings are multiline
-*** Strings are formatted with Telegram markdownV2
-*** Strings contain substitution variables starting with "$" ("$$" is literal "$")
-*** Variables are substituted only once. "$" in variable values is inserted literally
-*** Program will not start if there are undefined variables. List of variables depend on a key
-*** Strings start with "<" and end with ">". "<" and ">" are escaped as "\<" and "\>"
-*** First newline after "<" is ignored". First newline before ">" is ignored
-*** Keys end with ":". Spaces before ":" are ignored
-*** Line is a comment if a "#" is at position 0 and it is not inside string. There are no comments inside strings
-** Settings
-*** File name: "settings.txt"
-*** All content is in ascii
-*** Key and value are on the same line
-*** Key-value separator is ":". Spaces before and after ":" are ignored. Values cannot contain spaces
-*** Line is a comment if "#" is at position 0
+*** Dependencies
+**** Owns and wraps: "tg", "yk", "les", "acc"
+**** Uses and receives: "cfg", "cred", "log"
+*** Events
+**** "ev_bot_init": after "bot_init"
+**** "ev_bot_init_fail": after "bot_init"
+**** "ev_bot_stopped": after "bot_stop_prep"
+*** Methods
+**** "bot_init": start initialization
+- Events: "ev_bot_init", "ev_bot_init_fail"
+- Second call will do nothing
+- Module will actually initialize after "ev_bot_init"
+- Methods if called immediately after will fail. Exceptions: "bot_pollfds", "bot_update", "bot_events" - they will work normally
+**** "bot_stop_prep": begin module shutdown. "bot_pollfds" must be serviced, possibly multiple times
+- Events: "ev_bot_stoppped"
+**** "bot_stop": signal the module that the program is closing
+- Use only after event "ev_bot_stopped"
+- "bot_pollfds" and "bot_events" will be empty after this call
+- All other methods will fail
+- Call "bot_init" to use the module again
+**** "bot_events": get list of module specific events
+- Multiple calls will return same events before "bot_update"
+- Old events are removed after "bot_update"
+**** "bot_pollfds": get list of "pollfs" to watch for
+**** "bot_update": notify the module about result of "poll"
 
 * External services
 ** Telegram
