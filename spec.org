@@ -519,6 +519,8 @@ yk_stop(&yk);
 **** "account"
 ***** "account_lessons": list of unlocked "lesson" handles including deactivated ones, max length - "account_lessons_len"
 ***** "account_payments": list of all successful and pending payments for the account as "yk_payment", max length - "account_payments_len"
+***** "account_is_admin": true if admin, TODO not the right place but not worth its own module
+***** "account_is_blocked_support": true if the user is forbidden to forward messages to the admin, TODO not the right place but not worth its own module
 *** Events
 **** "ev_acc_init": after "acc_init"
 **** "ev_acc_init_fail": after "acc_init"
@@ -553,6 +555,7 @@ yk_stop(&yk);
 - Fails immediately if nonexistent
 **** "acc_unlock_les": adds a "lesson" to "account_lessons" and its "yk_payment" to "account_payments"
 - Events: "acc_les_unlocked", "acc_unlock_fail"
+**** "acc_block_support": forbids the user to send messages to the admin, TODO not the right place but not worth its own module
 *** Data storage
 **** File name: "$PWD/acc.txt"
 **** Keys and values: ascii
