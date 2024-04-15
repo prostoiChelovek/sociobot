@@ -1,0 +1,2 @@
+maintainer-clean:
+	rm ./Makefile

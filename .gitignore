@@ -1,0 +1,4 @@
+*.o
+deps.mk
+src/main
+
