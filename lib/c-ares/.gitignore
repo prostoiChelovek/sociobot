@@ -1,3 +1,5 @@
+.dirstamp
+config.cache
 .deps
 .libs
 *.lib

@@ -58,10 +58,14 @@ curl/lib/.libs/libcurl.a: mbedtls/library/libmbedtls.a \
 		--disable-tftp \
 		--disable-zlib \
 		--without-gnutls \
-		--without-libidn \
 		--without-librtmp \
 		--without-libssh2 \
 		--without-nss \
+		--without-libidn \
+		--without-libidn2 \
+		--without-libpsl \
+		--without-zstd \
+		--without-brotli \
 		--without-zlib && \
 		$(MAKE) -C lib
 
