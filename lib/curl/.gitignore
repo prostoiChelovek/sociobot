@@ -16,6 +16,7 @@ lib/curl/docs/libcurl/opts/Makefile
 lib/curl/include/Makefile
 lib/curl/include/curl/Makefile
 lib/curl/libcurl.pc
+tests/configurehelp.pm
 
 *.asc
 *.dll

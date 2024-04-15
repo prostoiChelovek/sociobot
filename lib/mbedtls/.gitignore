@@ -1,3 +1,5 @@
+dist/
+
 # Random seed file created by test scripts and sample programs
 seedfile
 # MBEDTLS_PSA_INJECT_ENTROPY seed file created by the test framework

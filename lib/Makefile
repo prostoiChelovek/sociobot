@@ -1,5 +1,7 @@
+.NOPARALLEL: curl/lib/.libs/libcurl.a
+
 c-ares/src/lib/.libs/libcares.a:
-	cd c-ares && ./configure -C \
+	cd c-ares && ./configure \
 		--disable-cares-threads \
 		--disable-tests \
 		--enable-static \
@@ -7,7 +9,7 @@ c-ares/src/lib/.libs/libcares.a:
 	$(MAKE) -C src/lib
 
 nghttp2/lib/.libs/libnghttp2.a:
-	cd nghttp2 && ./configure -C \
+	cd nghttp2 && ./configure \
 		--disable-shared \
 		--enable-static \
 		--disable-threads \
@@ -30,20 +32,19 @@ nghttp2/lib/.libs/libnghttp2.a:
 		--with-libbrotlidec=no && \
 	$(MAKE) -C lib
 
-mbedtls/library/libmbedtls.a:
-	cd mbedtls && $(MAKE) library/libmbedtls.a
+mbedtls/dist/lib/libmbedtls.a:
+	cd mbedtls && $(MAKE) -C library static && $(MAKE) DESTDIR=./dist install
 
-curl/lib/.libs/libcurl.a: mbedtls/library/libmbedtls.a \
+curl/lib/.libs/libcurl.a: mbedtls/dist/lib/libmbedtls.a \
 		nghttp2/lib/.libs/libnghttp2.a \
 		c-ares/src/lib/.libs/libcares.a
-	cd curl && ./configure -C \
+	cd curl && ./configure \
 		--disable-docs \
 		--disable-shared \
 		--disable-pthreads \
 		--disable-threaded-resolver \
 		--enable-ares \
-		--without-ssl \
-		--with-mbedtls=$(CURDIR)/mbedtls/ \
+		--with-mbedtls=$(CURDIR)/mbedtls/dist/ \
 		--disable-dict \
 		--disable-ftp \
 		--disable-imap \
@@ -70,7 +71,7 @@ curl/lib/.libs/libcurl.a: mbedtls/library/libmbedtls.a \
 		$(MAKE) -C lib
 
 clean:
-	$(MAKE) -C mbedtls/library clean
+	rm -R mbedtls/dist/ && $(MAKE) -C mbedtls/library clean
 	$(MAKE) -C nghttp2 maintainer-clean
 	$(MAKE) -C curl maintainer-clean || :
 
