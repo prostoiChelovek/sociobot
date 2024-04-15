@@ -1,6 +1,6 @@
-CC = gcc -ansi -fdiagnostics-color=never -fno-diagnostics-show-caret
+CC = gcc -fdiagnostics-color=never -fno-diagnostics-show-caret
 CFLAGS = -Wall -Werror -pedantic -ggdb -I../lib
-STATIC = -static
+STATIC = #-static
 
 AR = ar
 
@@ -12,8 +12,7 @@ LIBS = -I../lib/curl/include \
 	   -lcurl -L../lib/curl/lib/.libs/ \
 	   -lnghttp2 -L../lib/nghttp2/lib/.libs/ \
 	   -lcares -L../lib/c-ares/src/lib/.libs/ \
-	   -lmbedtls -lmbedcrypto -lmbedx509 -L../lib/mbedtls/dist/lib
-
+	   -lssl -lcrypto
 
 LIBDEPS = ../lib/curl/lib/.libs/libcurl.a
 
