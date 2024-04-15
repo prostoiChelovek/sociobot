@@ -101,7 +101,7 @@
 ***** "tg_msg_is_delivered": true after "ev_tg_sent"
 ***** "tg_msg_is_failed": true after "ev_tg_send_fail"
 ***** "tg_msg_is_deleted": true after "ev_tg_msg_deleted"
-***** "tg_msg_id": telegram id as uint32. Valid only if "tg_msg_is_delivered" and not "tg_msg_is_deleted"
+***** "tg_msg_ids": list of telegram id as uint32. Valid only if "tg_msg_is_delivered" and not "tg_msg_is_deleted", long messages are split, max length - "tg_msg_ids_len"
 ***** "tg_msg_chat": get "tg_chat"
 ***** "tg_msg_text": get message content as an utf-8 string
 ***** "tg_msg_print": description to use in logs as an ascii string (max length - "tg_msg_print_len")
@@ -197,6 +197,7 @@
 ***** ".text" starts with "<" and ends with ">". "<" and ">" are escaped as "\<" and "\>"
 ***** First newline after "<" is ignored". First newline before ">" is ignored
 ***** Other values are enclosed in double quotes. Everything inside quotes is treated literally
+***** Lists are in format '<key> : "<first>", "<second>" , "<third>"'. Trailing "," is allowed
 *** Example
 #+begin_src C
 sob_ev evs[228];
