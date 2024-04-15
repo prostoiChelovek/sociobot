@@ -1,4 +1,11 @@
 *.o
+*.lo
+*.plist
+*.Plo
+*.la
+.deps/
+.dirstamp/
+
 deps.mk
 src/main
 
