@@ -1,5 +1,13 @@
 .NOPARALLEL: curl/lib/.libs/libcurl.a
 
+bearssl/dist/lib/libbearssl.a:
+	$(MAKE) -C bearssl
+	cd bearssl && \
+		( rm -r dist/ 2>/dev/null || : ) && \
+		mkdir -p dist/lib/ dist/include/ && \
+		cp build/libbearssl.a dist/lib  && \
+		cp inc/bearssl*.h dist/include
+
 c-ares/src/lib/.libs/libcares.a:
 	cd c-ares && ./configure \
 		--disable-cares-threads \
@@ -33,9 +41,10 @@ nghttp2/lib/.libs/libnghttp2.a:
 	$(MAKE) -C lib
 
 curl/lib/.libs/libcurl.a: nghttp2/lib/.libs/libnghttp2.a \
-		c-ares/src/lib/.libs/libcares.a
+		c-ares/src/lib/.libs/libcares.a \
+		bearssl/dist/lib/libbearssl.a
 	cd curl && ./configure \
-		--with-openssl \
+		--with-bearssl=$(CURDIR)/bearssl/dist/ \
 		--disable-docs \
 		--disable-shared \
 		--disable-pthreads \
@@ -69,4 +78,5 @@ curl/lib/.libs/libcurl.a: nghttp2/lib/.libs/libnghttp2.a \
 clean:
 	$(MAKE) -C nghttp2 maintainer-clean
 	$(MAKE) -C curl maintainer-clean || :
+	$(MAKE) -C bearssl clean && rm -r bearssl/dist/
 

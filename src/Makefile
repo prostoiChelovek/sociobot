@@ -1,6 +1,6 @@
 CC = gcc -fdiagnostics-color=never -fno-diagnostics-show-caret
 CFLAGS = -Wall -Werror -pedantic -ggdb -I../lib
-STATIC = #-static
+STATIC = -static
 
 AR = ar
 
@@ -9,10 +9,10 @@ SRC_MOD = main.c tg.c ev.c
 OBJ_MOD = $(SRC_MOD:.c=.o)
 
 LIBS = -I../lib/curl/include \
-	   -lcurl -L../lib/curl/lib/.libs/ \
-	   -lnghttp2 -L../lib/nghttp2/lib/.libs/ \
-	   -lcares -L../lib/c-ares/src/lib/.libs/ \
-	   -lssl -lcrypto
+	   ../lib/curl/lib/.libs/libcurl.a \
+	   ../lib/nghttp2/lib/.libs/libnghttp2.a \
+	   ../lib/c-ares/src/lib/.libs/libcares.a \
+	   ../lib/bearssl/dist/lib/libbearssl.a
 
 LIBDEPS = ../lib/curl/lib/.libs/libcurl.a
 
