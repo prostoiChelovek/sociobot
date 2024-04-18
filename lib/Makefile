@@ -1,23 +1,34 @@
 .NOPARALLEL: curl/lib/.libs/libcurl.a
 
-bearssl/dist/lib/libbearssl.a:
-	$(MAKE) -C bearssl
+CC = musl/inst/bin/musl-gcc
+
+$(CC):
+	cd musl && \
+		./configure \
+			--disable-shared \
+			--enable-optimize \
+			--prefix=$(CURDIR)/musl/inst
+	$(MAKE) -C musl
+	$(MAKE) -C musl install
+
+bearssl/dist/lib/libbearssl.a: $(CC)
+	$(MAKE) CC=$(CURDIR)/$(CC) -C bearssl
 	cd bearssl && \
 		( rm -r dist/ 2>/dev/null || : ) && \
 		mkdir -p dist/lib/ dist/include/ && \
 		cp build/libbearssl.a dist/lib  && \
 		cp inc/bearssl*.h dist/include
 
-c-ares/src/lib/.libs/libcares.a:
-	cd c-ares && ./configure \
+c-ares/src/lib/.libs/libcares.a: $(CC)
+	cd c-ares && CC=$(CURDIR)/$(CC) ./configure \
 		--disable-cares-threads \
 		--disable-tests \
 		--enable-static \
-		--disable-shared && \
-	$(MAKE) -C src/lib
+		--disable-shared
+	$(MAKE) CC=$(CURDIR)/$(CC) -C c-ares/src/lib
 
-nghttp2/lib/.libs/libnghttp2.a:
-	cd nghttp2 && ./configure \
+nghttp2/lib/.libs/libnghttp2.a: $(CC)
+	cd nghttp2 && CC=$(CURDIR)/$(CC) ./configure \
 		--disable-shared \
 		--enable-static \
 		--disable-threads \
@@ -37,13 +48,14 @@ nghttp2/lib/.libs/libnghttp2.a:
 		--with-libnghttp3=no \
 		--with-libbpf=no \
 		--with-libbrotlienc=no \
-		--with-libbrotlidec=no && \
-	$(MAKE) -C lib
+		--with-libbrotlidec=no
+	$(MAKE) CC=$(CURDIR)/$(CC) -C nghttp2/lib
 
-curl/lib/.libs/libcurl.a: nghttp2/lib/.libs/libnghttp2.a \
+curl/lib/.libs/libcurl.a: $(CC) \
+		nghttp2/lib/.libs/libnghttp2.a \
 		c-ares/src/lib/.libs/libcares.a \
 		bearssl/dist/lib/libbearssl.a
-	cd curl && ./configure \
+	cd curl && CC=$(CURDIR)/$(CC) ./configure \
 		--with-bearssl=$(CURDIR)/bearssl/dist/ \
 		--disable-docs \
 		--disable-shared \
@@ -72,11 +84,12 @@ curl/lib/.libs/libcurl.a: nghttp2/lib/.libs/libnghttp2.a \
 		--without-libpsl \
 		--without-zstd \
 		--without-brotli \
-		--without-zlib && \
-		$(MAKE) -C lib
+		--without-zlib
+	$(MAKE) CC=$(CURDIR)/$(CC) -C curl/lib
 
 clean:
+	$(MAKE) -C musl clean && rm -r musl/inst/
 	$(MAKE) -C nghttp2 maintainer-clean
-	$(MAKE) -C curl maintainer-clean || :
 	$(MAKE) -C bearssl clean && rm -r bearssl/dist/
+	$(MAKE) -C curl maintainer-clean || :
 

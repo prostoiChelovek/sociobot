@@ -1,5 +1,5 @@
-CC = gcc -fdiagnostics-color=never -fno-diagnostics-show-caret
-CFLAGS = -Wall -Werror -pedantic -ggdb -I../lib
+CC = $(CURDIR)/../lib/musl/inst/bin/musl-gcc
+CFLAGS = -fdiagnostics-color=never -fno-diagnostics-show-caret -Wall -Werror -pedantic -ggdb -I../lib
 STATIC = -static
 
 AR = ar
@@ -18,19 +18,22 @@ LIBDEPS = ../lib/curl/lib/.libs/libcurl.a
 
 all:	$(BINARIES)
 
-%.o:	%.c
+%.o:	$(CC) %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-main:	$(OBJ_MOD) $(LIBDEPS)
+main:	$(CC) $(OBJ_MOD) $(LIBDEPS)
 	$(CC) $(CFLAGS) $(STATIC) $(OBJ_MOD) $(LIBS) -o $@
 
-https_demo: https.c $(LIBDEPS)
+https_demo: https.c $(LIBDEPS) $(CC)
 	$(CC) $(CFLAGS) $(STATIC) https.c $(LIBS) -D SOB_HTTPS_DEMO -o $@
 
-../lib/curl/lib/.libs/libcurl.a:
+$(CC):
+	$(MAKE) -C ../lib musl/inst/bin/musl-gcc
+
+../lib/curl/lib/.libs/libcurl.a: $(CC)
 	$(MAKE) -C ../lib curl/lib/.libs/libcurl.a
 
-deps.mk:	$(wildcard *.c)
+deps.mk:	$(CC) $(wildcard *.c)
 	$(CC) -MM $(wildcard *.c) > $@
 
 clean:
