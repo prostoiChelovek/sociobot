@@ -19,16 +19,22 @@ bearssl/dist/lib/libbearssl.a: $(CC)
 		cp build/libbearssl.a dist/lib  && \
 		cp inc/bearssl*.h dist/include
 
-c-ares/src/lib/.libs/libcares.a: $(CC)
-	cd c-ares && CC=$(CURDIR)/$(CC) ./configure \
+c-ares/dist/lib/libcares.a: $(CC)
+	cd c-ares && \
+		CC=$(CURDIR)/$(CC) ac_cv_path_PKGCONFIG=false ./configure \
+		--prefix=$(CURDIR)/c-ares/dist \
 		--disable-cares-threads \
 		--disable-tests \
 		--enable-static \
 		--disable-shared
 	$(MAKE) CC=$(CURDIR)/$(CC) -C c-ares/src/lib
+	$(MAKE) -C c-ares/src/lib install
+	$(MAKE) -C c-ares/include install
 
-nghttp2/lib/.libs/libnghttp2.a: $(CC)
-	cd nghttp2 && CC=$(CURDIR)/$(CC) ./configure \
+nghttp2/dist/lib/libnghttp2.a: $(CC)
+	cd nghttp2 && \
+		CC=$(CURDIR)/$(CC) ac_cv_path_PKGCONFIG=false ./configure \
+		--prefix=$(CURDIR)/nghttp2/dist/ \
 		--disable-shared \
 		--enable-static \
 		--disable-threads \
@@ -50,18 +56,21 @@ nghttp2/lib/.libs/libnghttp2.a: $(CC)
 		--with-libbrotlienc=no \
 		--with-libbrotlidec=no
 	$(MAKE) CC=$(CURDIR)/$(CC) -C nghttp2/lib
+	$(MAKE) -C nghttp2/lib install
 
 curl/lib/.libs/libcurl.a: $(CC) \
-		nghttp2/lib/.libs/libnghttp2.a \
-		c-ares/src/lib/.libs/libcares.a \
+		nghttp2/dist/lib/libnghttp2.a \
+		c-ares/dist/lib/libcares.a \
 		bearssl/dist/lib/libbearssl.a
-	cd curl && CC=$(CURDIR)/$(CC) ./configure \
+	cd curl && \
+		CC=$(CURDIR)/$(CC) ac_cv_path_PKGCONFIG=false ./configure \
 		--with-bearssl=$(CURDIR)/bearssl/dist/ \
+		--enable-ares=$(CURDIR)/c-ares/dist/ \
+		--with-nghttp2=$(CURDIR)/nghttp2/dist/ \
 		--disable-docs \
 		--disable-shared \
 		--disable-pthreads \
 		--disable-threaded-resolver \
-		--enable-ares \
 		--disable-dict \
 		--disable-ftp \
 		--disable-imap \
@@ -88,8 +97,10 @@ curl/lib/.libs/libcurl.a: $(CC) \
 	$(MAKE) CC=$(CURDIR)/$(CC) -C curl/lib
 
 clean:
-	$(MAKE) -C musl clean && rm -r musl/inst/
-	$(MAKE) -C nghttp2 maintainer-clean
-	$(MAKE) -C bearssl clean && rm -r bearssl/dist/
-	$(MAKE) -C curl maintainer-clean || :
+	rm -rf musl/inst/ nghttp2/dist/ c-ares/dist/ bearssl/dist/
+	$(MAKE) -C musl clean
+	$(MAKE) -C bearssl clean
+	$(MAKE) -C nghttp2/lib maintainer-clean || :
+	$(MAKE) -C c-ares/src/lib maintainer-clean || :
+	$(MAKE) -C curl/lib maintainer-clean || :
 

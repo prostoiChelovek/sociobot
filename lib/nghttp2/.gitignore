@@ -1,6 +1,8 @@
 # emacs backup file
 *~
 
+dist/
+
 config.cache
 doc/building-android-binary.rst
 doc/conf.py
