@@ -1,11 +1,12 @@
 CC = $(CURDIR)/../lib/musl/inst/bin/musl-gcc
-CFLAGS = -fdiagnostics-color=never -fno-diagnostics-show-caret -Wall -Werror -pedantic -ggdb -I../lib
+CFLAGS = -fdiagnostics-color=never -fno-diagnostics-show-caret \
+		 -Wall -Werror -pedantic -ggdb -I../lib
 STATIC = -static
 
 AR = ar
 
 BINARIES = main
-SRC_MOD = main.c tg.c ev.c
+SRC_MOD = main.c tg.c ev.c panic.c
 OBJ_MOD = $(SRC_MOD:.c=.o)
 
 LIBS = -I../lib/curl/include \
@@ -18,14 +19,14 @@ LIBDEPS = ../lib/curl/lib/.libs/libcurl.a
 
 all:	$(BINARIES)
 
-%.o:	$(CC) %.c
+%.o:	%.c $(CC)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-main:	$(CC) $(OBJ_MOD) $(LIBDEPS)
+main:	$(OBJ_MOD) $(LIBDEPS) $(CC)
 	$(CC) $(CFLAGS) $(STATIC) $(OBJ_MOD) $(LIBS) -o $@
 
-https_demo: https.c $(LIBDEPS) $(CC)
-	$(CC) $(CFLAGS) $(STATIC) https.c $(LIBS) -D SOB_HTTPS_DEMO -o $@
+https_demo: https.c https.h panic.o $(LIBDEPS) $(CC)
+	$(CC) $(CFLAGS) $(STATIC) https.c $(LIBS) -D SOB_HTTPS_DEMO -o $@ panic.o
 
 $(CC):
 	$(MAKE) -C ../lib musl/inst/bin/musl-gcc

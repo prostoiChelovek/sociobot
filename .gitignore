@@ -8,4 +8,5 @@
 
 deps.mk
 src/main
+src/https_demo
 

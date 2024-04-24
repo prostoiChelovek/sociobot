@@ -136,7 +136,7 @@
 **** "ev_tg_msg_updated": after "tg_msg_upd_text"
 **** "ev_tg_msg_upd_fail": after "tg_msg_upd_text"
 **** "ev_tg_btn_deleted": after "tg_msg_del_button"
-**** "ev_tg_btn_del_fail': after "tg_msg_del_button"
+**** "ev_tg_btn_del_fail": after "tg_msg_del_button"
 *** Methods
 **** Each method here is bound to "tg_mod". There may be multiple instances
 **** "tg_init": start initialization of a "tg_mod"
