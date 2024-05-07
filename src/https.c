@@ -142,7 +142,7 @@ enum https_stop_prep_res https_stop_prep(struct https_mod * m) {
     }
 
     if (_set_st(m, _st_stopped) != _set_st_ok) {
-        sob_panic("_set_st(_st_stopped) in https_stop_prep");
+        SOB_PANIC("_set_st(_st_stopped) in https_stop_prep");
     }
     return https_stop_prep_ok;
 }
@@ -167,10 +167,10 @@ size_t https_pollfds(struct https_mod * m, struct pollfd ** fds_out) {
 
 void _req_fail(struct https_mod * m) {
     if (_set_st(m, _st_err) != _set_st_ok) {
-        sob_panic("_set_st(_st_err) in update");
+        SOB_PANIC("_set_st(_st_err) in update");
     }
     if (_add_ev(m, https_ev_req_fail) != _add_ev_ok) {
-        sob_panic("_add_ev(https_ev_req_fail) in update");
+        SOB_PANIC("_add_ev(https_ev_req_fail) in update");
     }
 }
 
@@ -185,17 +185,17 @@ void https_update(struct https_mod * m, struct pollfd * fds, nfds_t nfds) {
 
     if (m->st == _st_stopped) {
         if (_add_ev(m, https_ev_stopped) != _add_ev_ok ) {
-            sob_panic("_add_ev(https_ev_stopped)");
+            SOB_PANIC("_add_ev(https_ev_stopped)");
         }
         return;
     }
 
     if (m->st == _st_just_init) {
         if (_set_st(m, _st_idle) != _set_st_ok) {
-            sob_panic("_set_st(_st_err) in update");
+            SOB_PANIC("_set_st(_st_err) in update");
         }
         if (_add_ev(m, https_ev_init) != _add_ev_ok ) {
-            sob_panic("_add_ev(https_ev_init)");
+            SOB_PANIC("_add_ev(https_ev_init)");
         }
         return;
     }
@@ -246,10 +246,10 @@ void https_update(struct https_mod * m, struct pollfd * fds, nfds_t nfds) {
                         curl_easy_getinfo(m->curl,
                                 CURLINFO_RESPONSE_CODE, &m->resp_status);
                         if (_set_st(m, _st_idle) != _set_st_ok) {
-                            sob_panic("_set_st(_st_idle) in update");
+                            SOB_PANIC("_set_st(_st_idle) in update");
                         }
                         if (_add_ev(m, https_ev_req_fin) != _add_ev_ok ) {
-                            sob_panic("_add_ev(https_ev_req_fin) in update");
+                            SOB_PANIC("_add_ev(https_ev_req_fin) in update");
                         }
                         curl_multi_remove_handle(m->curlm, m->curl);
 
@@ -312,7 +312,7 @@ enum https_req_res https_req_json(struct https_mod * m,
     curl_multi_add_handle(m->curlm, m->curl);
 
     if (_set_st(m, _st_pend) != _set_st_ok) {
-        sob_panic("_set_st(_st_pend) in https_req_json");
+        SOB_PANIC("_set_st(_st_pend) in https_req_json");
     }
 
     return https_req_ok;
@@ -344,7 +344,7 @@ int _sock_cb(CURL * h, curl_socket_t fd, int what,
     (void) fd_data;
 
     if (fd == m->timerfd) {
-        sob_panic("_sock_cb: fd == timerfd but curl doesn't know about timer");
+        SOB_PANIC("_sock_cb: fd == timerfd but curl doesn't know about timer");
     }
 
     if (what == CURL_POLL_REMOVE) {
@@ -434,7 +434,7 @@ int _write_cb(char * data, size_t throwaway, size_t len, void * user_data) {
     }
 
     if (_add_ev(m, https_ev_req_data) != _add_ev_ok ) {
-        sob_panic("_add_ev(https_ev_req_data) in _write_cb");
+        SOB_PANIC("_add_ev(https_ev_req_data) in _write_cb");
     }
 
     return write_len;
@@ -535,7 +535,7 @@ int main(void) {
     }
 
     https_set_verbosity(&m, https_verbosity_debug);
-    https_set_timeout(&m, 1);
+    https_set_timeout(&m, 2);
 
     while (1) {
         struct https_ev * evs;
