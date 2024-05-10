@@ -28,25 +28,25 @@ enum st_ {
     st_null_
 };
 
-void set_st_(struct rjson_ctx * c, enum st_ st);
+static void set_st_(struct rjson_ctx * c, enum st_ st);
 
-void add_lvl_(struct rjson_ctx * c, enum level_ty_ ty);
-void pop_lvl_(struct rjson_ctx * c);
-enum level_ty_ lvl_(struct rjson_ctx * c);
-void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected);
-void assert_st_(struct rjson_ctx * c, enum st_ expected);
+static void add_lvl_(struct rjson_ctx * c, enum level_ty_ ty);
+static void pop_lvl_(struct rjson_ctx * c);
+static enum level_ty_ lvl_(struct rjson_ctx * c);
+static void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected);
+static void assert_st_(struct rjson_ctx * c, enum st_ expected);
 
-int is_whitespace_(char ch);
-int is_num_start_(char ch);
+static int is_whitespace_(char ch);
+static int is_num_start_(char ch);
 
-enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_str_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_num_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_true_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_false_(struct rjson_ctx * c, char ch);
-enum rjson_next_res next_null_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_str_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_true_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_false_(struct rjson_ctx * c, char ch);
+static enum rjson_next_res next_null_(struct rjson_ctx * c, char ch);
 
 struct rjson_ctx {
     char * str;
@@ -176,7 +176,7 @@ int rjson_cur_is_true(const struct rjson_ctx * c) {
     return c->bool_is_true;
 }
 
-void set_st_(struct rjson_ctx * c, enum st_ st) {
+static void set_st_(struct rjson_ctx * c, enum st_ st) {
     if (c->st != st) {
         switch (st) {
         case st_str_:
@@ -211,7 +211,7 @@ void set_st_(struct rjson_ctx * c, enum st_ st) {
     c->st = st;
 }
 
-void add_lvl_(struct rjson_ctx * c, enum level_ty_ lvl) {
+static void add_lvl_(struct rjson_ctx * c, enum level_ty_ lvl) {
     if (c->lvls_len == max_depth_) {
         SOB_PANIC("add_lvl_ in rjson: max depth reached");
     }
@@ -219,45 +219,45 @@ void add_lvl_(struct rjson_ctx * c, enum level_ty_ lvl) {
     c->lvls_len++;
 }
 
-void pop_lvl_(struct rjson_ctx * c) {
+static void pop_lvl_(struct rjson_ctx * c) {
     if (c->lvls_len == 0) { /* cannot happen during normal operation */
         SOB_PANIC("pop_lvl_: no levels to pop");
     }
     c->lvls_len--;
 }
 
-enum level_ty_ lvl_(struct rjson_ctx * c) {
+static enum level_ty_ lvl_(struct rjson_ctx * c) {
     if (c->lvls_len == 0) {
         return lvl_none_;
     }
     return c->lvls[c->lvls_len - 1];
 }
 
-void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected) {
+static void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected) {
     if (lvl_(c) != expected) {
         SOB_PANIC("assert_lvl_: expected %i but got %i", lvl_(c), expected);
     }
 }
 
-void assert_st_(struct rjson_ctx * c, enum st_ expected) {
+static void assert_st_(struct rjson_ctx * c, enum st_ expected) {
     if (c->st != expected) {
         SOB_PANIC("assert_st_: expected %i but got %i", c->st, expected);
     }
 }
 
-int is_whitespace_(char ch) {
+static int is_whitespace_(char ch) {
     return ch == ' '
         || ch == '\n'
         || ch == '\r'
         || ch == '\t';
 }
 
-int is_num_start_(char ch) {
+static int is_num_start_(char ch) {
     return (ch >= '0' && ch <= '9')
         || ch == '-';
 }
 
-enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch) {
     assert_st_(c, st_idle_);
 
     c->cur = rjson_incomplete;
@@ -413,18 +413,18 @@ enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch) {
     };
 }
 
-enum add_str_ch_res_ {
+static enum add_str_ch_res_ {
     add_ch_overflow_ = -1,
     add_ch_ok_ = 1
 } add_str_ch_(struct rjson_ctx * c, char ch);
 
-enum str_escape_res_ {
+static enum str_escape_res_ {
     str_escape_invalid_ = -1,
     str_escaped_ = 1,
     str_escape_utf16_ = 2
 } str_escape_(char * ch);
 
-enum rjson_next_res next_str_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_str_(struct rjson_ctx * c, char ch) {
     assert_st_(c, st_str_);
     if (c->str_is_key) {
         assert_lvl_(c, lvl_obj_);
@@ -477,7 +477,7 @@ enum rjson_next_res next_str_(struct rjson_ctx * c, char ch) {
     return rjson_next_syntax;
 }
 
-enum rjson_next_res next_num_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch) {
     assert_st_(c, st_num_);
 
     if (is_whitespace_(ch) || (strchr("}],", ch) && ch != '\0')) {
@@ -594,20 +594,20 @@ enum rjson_next_res next_num_(struct rjson_ctx * c, char ch) {
     return rjson_next_ok;
 }
 
-enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
+static enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
         const char * word);
 
-enum rjson_next_res next_true_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_true_(struct rjson_ctx * c, char ch) {
     assert_st_(c, st_true_);
     return next_bool_(c, ch, "true");
 }
 
-enum rjson_next_res next_false_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_false_(struct rjson_ctx * c, char ch) {
     assert_st_(c, st_false_);
     return next_bool_(c, ch, "false");
 }
 
-enum rjson_next_res next_null_(struct rjson_ctx * c, char ch) {
+static enum rjson_next_res next_null_(struct rjson_ctx * c, char ch) {
     const char * word = "null";
 
     if (ch != word[c->special_word_pos]) {
@@ -623,7 +623,7 @@ enum rjson_next_res next_null_(struct rjson_ctx * c, char ch) {
     return rjson_next_ok;
 }
 
-enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
+static enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
         const char * word) {
     if (ch != word[c->special_word_pos]) {
         return rjson_next_syntax;
@@ -638,7 +638,7 @@ enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
     return rjson_next_ok;
 }
 
-enum add_str_ch_res_ add_str_ch_(struct rjson_ctx * c, char ch) {
+static enum add_str_ch_res_ add_str_ch_(struct rjson_ctx * c, char ch) {
     if (c->str_len == c->str_mlen) {
         return add_ch_overflow_;
     } else {
@@ -648,7 +648,7 @@ enum add_str_ch_res_ add_str_ch_(struct rjson_ctx * c, char ch) {
     }
 }
 
-enum str_escape_res_ str_escape_(char * ch) {
+static enum str_escape_res_ str_escape_(char * ch) {
     switch (*ch) {
     case 'u':
         return str_escape_utf16_;
