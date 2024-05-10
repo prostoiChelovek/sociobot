@@ -8,51 +8,51 @@
 #include <stdio.h> /* for fprintf */
 
 enum {
-    _max_depth = 24
+    max_depth_ = 24
 };
 
-enum _level_ty {
-    _lvl_none = 0,
-    _lvl_obj,
-    _lvl_arr
+enum level_ty_ {
+    lvl_none_ = 0,
+    lvl_obj_,
+    lvl_arr_
 };
 
-enum _st {
-    _st_idle,
-    _st_want_key,
-    _st_want_colon,
-    _st_str,
-    _st_num,
-    _st_true,
-    _st_false,
-    _st_null
+enum st_ {
+    st_idle_,
+    st_want_key_,
+    st_want_colon_,
+    st_str_,
+    st_num_,
+    st_true_,
+    st_false_,
+    st_null_
 };
 
-void _set_st(struct rjson_ctx * c, enum _st st);
+void set_st_(struct rjson_ctx * c, enum st_ st);
 
-void _add_lvl(struct rjson_ctx * c, enum _level_ty ty);
-void _pop_lvl(struct rjson_ctx * c);
-enum _level_ty _lvl(struct rjson_ctx * c);
-void _assert_lvl(struct rjson_ctx * c, enum _level_ty expected);
-void _assert_st(struct rjson_ctx * c, enum _st expected);
+void add_lvl_(struct rjson_ctx * c, enum level_ty_ ty);
+void pop_lvl_(struct rjson_ctx * c);
+enum level_ty_ lvl_(struct rjson_ctx * c);
+void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected);
+void assert_st_(struct rjson_ctx * c, enum st_ expected);
 
-int _is_whitespace(char ch);
-int _is_num_start(char ch);
+int is_whitespace_(char ch);
+int is_num_start_(char ch);
 
-enum rjson_next_res _next_idle(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_want_key(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_want_colon(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_str(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_num(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_true(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_false(struct rjson_ctx * c, char ch);
-enum rjson_next_res _next_null(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_str_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_num_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_true_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_false_(struct rjson_ctx * c, char ch);
+enum rjson_next_res next_null_(struct rjson_ctx * c, char ch);
 
 struct rjson_ctx {
     char * str;
     size_t str_mlen;
 
-    enum _level_ty lvls[_max_depth];
+    enum level_ty_ lvls[max_depth_];
     size_t lvls_len;
 
     size_t str_len;
@@ -63,11 +63,11 @@ struct rjson_ctx {
     int num_digit_pos;
     int num_is_neg;
     int num_exp;
-    enum _num_part_ty {
-        _num_part_leading_zero,
-        _num_part_int,
-        _num_part_frac,
-        _num_part_exp
+    enum num_part_ty_ {
+        num_part_leading_zero_,
+        num_part_int_,
+        num_part_frac_,
+        num_part_exp_
     } num_part;
 
     int special_word_pos; /* for true, false, null */
@@ -77,7 +77,7 @@ struct rjson_ctx {
 
     enum rjson_ty cur;
 
-    enum _st st;
+    enum st_ st;
     int is_val_expected;
     size_t pos;
 };
@@ -93,12 +93,12 @@ void rjson_init(struct rjson_ctx * c, char * str_out_buf, size_t str_mlen) {
     c->num_digit_pos = 0;
     c->num_is_neg = 0;
     c->num_exp = 0;
-    c->num_part = _num_part_int;
+    c->num_part = num_part_int_;
     c->special_word_pos = 0;
     c->bool_is_true = 0;
     c->buffered_ch = '\0';
     c->cur = rjson_incomplete;
-    _set_st(c, _st_idle);
+    set_st_(c, st_idle_);
     c->is_val_expected = 0;
     c->pos = 0;
 }
@@ -114,7 +114,7 @@ enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch) {
     }
 
     if (ch == '\0') {
-        if (_lvl(c) == _lvl_none) {
+        if (lvl_(c) == lvl_none_) {
             return rjson_next_fin;
         } else {
             return rjson_next_syntax;
@@ -122,29 +122,29 @@ enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch) {
     }
 
     switch (c->st) {
-    case _st_idle:
-        r = _next_idle(c, ch);
+    case st_idle_:
+        r = next_idle_(c, ch);
         break;
-    case _st_want_key:
-        r = _next_want_key(c, ch);
+    case st_want_key_:
+        r = next_want_key_(c, ch);
         break;
-    case _st_want_colon:
-        r = _next_want_colon(c, ch);
+    case st_want_colon_:
+        r = next_want_colon_(c, ch);
         break;
-    case _st_str:
-        r = _next_str(c, ch);
+    case st_str_:
+        r = next_str_(c, ch);
         break;
-    case _st_num:
-        r = _next_num(c, ch);
+    case st_num_:
+        r = next_num_(c, ch);
         break;
-    case _st_true:
-        r = _next_true(c, ch);
+    case st_true_:
+        r = next_true_(c, ch);
         break;
-    case _st_false:
-        r = _next_false(c, ch);
+    case st_false_:
+        r = next_false_(c, ch);
         break;
-    case _st_null:
-        r = _next_null(c, ch);
+    case st_null_:
+        r = next_null_(c, ch);
         break;
     };
 
@@ -176,138 +176,138 @@ int rjson_cur_is_true(const struct rjson_ctx * c) {
     return c->bool_is_true;
 }
 
-void _set_st(struct rjson_ctx * c, enum _st st) {
+void set_st_(struct rjson_ctx * c, enum st_ st) {
     if (c->st != st) {
         switch (st) {
-        case _st_str:
+        case st_str_:
             c->str_len = 0;
             c->str_is_escape = 0;
             c->str_is_key = 0;
             break;
-        case _st_num:
+        case st_num_:
             c->num = 0.0;
             c->num_digit_pos = 0;
             c->num_is_neg = 0;
             c->num_exp = 0;
-            c->num_part = _num_part_int;
+            c->num_part = num_part_int_;
             break;
-        case _st_true:
+        case st_true_:
             c->bool_is_true = 1;
             c->special_word_pos = 0;
             break;
-        case _st_false:
+        case st_false_:
             c->bool_is_true = 0;
             c->special_word_pos = 0;
             break;
-        case _st_null:
+        case st_null_:
             c->special_word_pos = 0;
             break;
-        case _st_idle:
-        case _st_want_key:
-        case _st_want_colon:
+        case st_idle_:
+        case st_want_key_:
+        case st_want_colon_:
             break;
         };
     }
     c->st = st;
 }
 
-void _add_lvl(struct rjson_ctx * c, enum _level_ty lvl) {
-    if (c->lvls_len == _max_depth) {
-        SOB_PANIC("_add_lvl in rjson: max depth reached");
+void add_lvl_(struct rjson_ctx * c, enum level_ty_ lvl) {
+    if (c->lvls_len == max_depth_) {
+        SOB_PANIC("add_lvl_ in rjson: max depth reached");
     }
     c->lvls[c->lvls_len] = lvl;
     c->lvls_len++;
 }
 
-void _pop_lvl(struct rjson_ctx * c) {
+void pop_lvl_(struct rjson_ctx * c) {
     if (c->lvls_len == 0) { /* cannot happen during normal operation */
-        SOB_PANIC("_pop_lvl: no levels to pop");
+        SOB_PANIC("pop_lvl_: no levels to pop");
     }
     c->lvls_len--;
 }
 
-enum _level_ty _lvl(struct rjson_ctx * c) {
+enum level_ty_ lvl_(struct rjson_ctx * c) {
     if (c->lvls_len == 0) {
-        return _lvl_none;
+        return lvl_none_;
     }
     return c->lvls[c->lvls_len - 1];
 }
 
-void _assert_lvl(struct rjson_ctx * c, enum _level_ty expected) {
-    if (_lvl(c) != expected) {
-        SOB_PANIC("_assert_lvl: expected %i but got %i", _lvl(c), expected);
+void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected) {
+    if (lvl_(c) != expected) {
+        SOB_PANIC("assert_lvl_: expected %i but got %i", lvl_(c), expected);
     }
 }
 
-void _assert_st(struct rjson_ctx * c, enum _st expected) {
+void assert_st_(struct rjson_ctx * c, enum st_ expected) {
     if (c->st != expected) {
-        SOB_PANIC("_assert_st: expected %i but got %i", c->st, expected);
+        SOB_PANIC("assert_st_: expected %i but got %i", c->st, expected);
     }
 }
 
-int _is_whitespace(char ch) {
+int is_whitespace_(char ch) {
     return ch == ' '
         || ch == '\n'
         || ch == '\r'
         || ch == '\t';
 }
 
-int _is_num_start(char ch) {
+int is_num_start_(char ch) {
     return (ch >= '0' && ch <= '9')
         || ch == '-';
 }
 
-enum rjson_next_res _next_idle(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_idle);
+enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_idle_);
 
     c->cur = rjson_incomplete;
 
-    if (_is_whitespace(ch)) {
+    if (is_whitespace_(ch)) {
         return rjson_next_ok;
     }
 
-    if (_lvl(c) == _lvl_none && ch != '{') {
+    if (lvl_(c) == lvl_none_ && ch != '{') {
         return rjson_next_syntax;
     }
 
     if (strchr("true", ch)) {
         c->is_val_expected = 0;
-        _set_st(c, _st_true);
-        return _next_true(c, ch);
+        set_st_(c, st_true_);
+        return next_true_(c, ch);
     } else if (strchr("false", ch)) {
         c->is_val_expected = 0;
-        _set_st(c, _st_false);
-        return _next_false(c, ch);
+        set_st_(c, st_false_);
+        return next_false_(c, ch);
     } else if (strchr("null", ch)) {
         c->is_val_expected = 0;
-        _set_st(c, _st_null);
-        return _next_null(c, ch);
-    } else if (_is_num_start(ch)) {
+        set_st_(c, st_null_);
+        return next_null_(c, ch);
+    } else if (is_num_start_(ch)) {
         c->is_val_expected = 0;
-        _set_st(c, _st_num);
-        return _next_num(c, ch);
+        set_st_(c, st_num_);
+        return next_num_(c, ch);
     }
 
     switch (ch) {
     case '{':
-        _add_lvl(c, _lvl_obj);
-        _set_st(c, _st_want_key);
+        add_lvl_(c, lvl_obj_);
+        set_st_(c, st_want_key_);
         c->cur = rjson_obj_start;
         c->is_val_expected = 0;
         return rjson_next_ok;
     case '[':
-        _add_lvl(c, _lvl_arr);
-        _set_st(c, _st_idle);
+        add_lvl_(c, lvl_arr_);
+        set_st_(c, st_idle_);
         c->cur = rjson_arr_start;
         c->is_val_expected = 0;
         return rjson_next_ok;
     case '}':
-        if (_lvl(c) == _lvl_obj) {
+        if (lvl_(c) == lvl_obj_) {
             if (! c->is_val_expected) {
-                _pop_lvl(c);
-                _set_st(c, _st_idle);
+                pop_lvl_(c);
+                set_st_(c, st_idle_);
                 c->cur = rjson_obj_end;
-                if (_lvl(c) == _lvl_none) {
+                if (lvl_(c) == lvl_none_) {
                     return rjson_next_fin;
                 } else {
                     return rjson_next_ok;
@@ -319,10 +319,10 @@ enum rjson_next_res _next_idle(struct rjson_ctx * c, char ch) {
             return rjson_next_syntax;
         }
     case ']':
-        if (_lvl(c) == _lvl_arr) {
+        if (lvl_(c) == lvl_arr_) {
             if (! c->is_val_expected) {
-                _pop_lvl(c);
-                _set_st(c, _st_idle);
+                pop_lvl_(c);
+                set_st_(c, st_idle_);
                 c->cur = rjson_arr_end;
                 return rjson_next_ok;
             } else {
@@ -332,18 +332,18 @@ enum rjson_next_res _next_idle(struct rjson_ctx * c, char ch) {
             return rjson_next_syntax;
         }
     case '"':
-        _set_st(c, _st_str);
+        set_st_(c, st_str_);
         c->cur = rjson_incomplete;
         c->is_val_expected = 0;
         return rjson_next_ok;
     case ',':
         if (! c->is_val_expected) {
             c->is_val_expected = 1;
-            if (_lvl(c) == _lvl_obj) {
-                _set_st(c, _st_want_key);
+            if (lvl_(c) == lvl_obj_) {
+                set_st_(c, st_want_key_);
                 c->cur = rjson_incomplete;
                 return rjson_next_ok;
-            } else if (_lvl(c) == _lvl_arr) {
+            } else if (lvl_(c) == lvl_arr_) {
                 /* no action required */
                 c->cur = rjson_incomplete;
                 return rjson_next_ok;
@@ -359,23 +359,23 @@ enum rjson_next_res _next_idle(struct rjson_ctx * c, char ch) {
     };
 }
 
-enum rjson_next_res _next_want_key(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_want_key);
-    _assert_lvl(c, _lvl_obj);
+enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_want_key_);
+    assert_lvl_(c, lvl_obj_);
 
-    if (_is_whitespace(ch)) {
+    if (is_whitespace_(ch)) {
         return rjson_next_ok;
     }
 
     switch (ch) {
     case '"':
-        _set_st(c, _st_str); /* resets str_is_key */
+        set_st_(c, st_str_); /* resets str_is_key */
         c->str_is_key = 1;
         c->cur = rjson_incomplete;
         return rjson_next_ok;
     case '}': /* empty obj */
-        _set_st(c, _st_idle);
-        _pop_lvl(c);
+        set_st_(c, st_idle_);
+        pop_lvl_(c);
         c->cur = rjson_obj_end;
         return rjson_next_ok;
     case '{':
@@ -388,17 +388,17 @@ enum rjson_next_res _next_want_key(struct rjson_ctx * c, char ch) {
     };
 }
 
-enum rjson_next_res _next_want_colon(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_want_colon);
-    _assert_lvl(c, _lvl_obj);
+enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_want_colon_);
+    assert_lvl_(c, lvl_obj_);
 
-    if (_is_whitespace(ch)) {
+    if (is_whitespace_(ch)) {
         return rjson_next_ok;
     }
 
     switch (ch) {
     case ':':
-        _set_st(c, _st_idle);
+        set_st_(c, st_idle_);
         c->cur = rjson_incomplete;
         c->is_val_expected = 1;
         return rjson_next_ok;
@@ -413,21 +413,21 @@ enum rjson_next_res _next_want_colon(struct rjson_ctx * c, char ch) {
     };
 }
 
-enum _add_str_ch_res {
-    _add_ch_overflow = -1,
-    _add_ch_ok = 1
-} _add_str_ch(struct rjson_ctx * c, char ch);
+enum add_str_ch_res_ {
+    add_ch_overflow_ = -1,
+    add_ch_ok_ = 1
+} add_str_ch_(struct rjson_ctx * c, char ch);
 
-enum _str_escape_res {
-    _str_escape_invalid = -1,
-    _str_escaped = 1,
-    _str_escape_utf16 = 2
-} _str_escape(char * ch);
+enum str_escape_res_ {
+    str_escape_invalid_ = -1,
+    str_escaped_ = 1,
+    str_escape_utf16_ = 2
+} str_escape_(char * ch);
 
-enum rjson_next_res _next_str(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_str);
+enum rjson_next_res next_str_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_str_);
     if (c->str_is_key) {
-        _assert_lvl(c, _lvl_obj);
+        assert_lvl_(c, lvl_obj_);
     }
 
     c->cur = rjson_incomplete;
@@ -437,14 +437,14 @@ enum rjson_next_res _next_str(struct rjson_ctx * c, char ch) {
     }
 
     if (c->str_is_escape) {
-        enum _str_escape_res r = _str_escape(&ch);
+        enum str_escape_res_ r = str_escape_(&ch);
         switch (r) {
-        case _str_escaped:
+        case str_escaped_:
             c->str_is_escape = 0;
             break; /* ch has escaped value */
-        case _str_escape_utf16:
+        case str_escape_utf16_:
             return rjson_next_syntax; /* XXX: not implemented */
-        case _str_escape_invalid:
+        case str_escape_invalid_:
             return rjson_next_syntax;
         };
     } else if (ch == '\\') {
@@ -454,18 +454,18 @@ enum rjson_next_res _next_str(struct rjson_ctx * c, char ch) {
         ch = '\0';
         c->cur = rjson_str;
         if (c->str_is_key) {
-            _set_st(c, _st_want_colon);
+            set_st_(c, st_want_colon_);
         } else {
-            _set_st(c, _st_idle);
+            set_st_(c, st_idle_);
         }
     }
 
     {
-        enum _add_str_ch_res r = _add_str_ch(c, ch);
+        enum add_str_ch_res_ r = add_str_ch_(c, ch);
         switch (r) {
-        case _add_ch_ok:
+        case add_ch_ok_:
             return rjson_next_ok;
-        case _add_ch_overflow:
+        case add_ch_overflow_:
             /* XXX: should not print */
             fprintf(stderr,
                 "WARNING @ %s:%i : string buffer overflow (str_mlen = %lu)\n",
@@ -477,12 +477,12 @@ enum rjson_next_res _next_str(struct rjson_ctx * c, char ch) {
     return rjson_next_syntax;
 }
 
-enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_num);
+enum rjson_next_res next_num_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_num_);
 
-    if (_is_whitespace(ch) || (strchr("}],", ch) && ch != '\0')) {
+    if (is_whitespace_(ch) || (strchr("}],", ch) && ch != '\0')) {
         if (c->num_digit_pos > 0) {
-            if (c->num_part == _num_part_exp) {
+            if (c->num_part == num_part_exp_) {
                 c->num *= pow(10.0, c->num_exp);
             }
             c->cur = rjson_num;
@@ -490,28 +490,28 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
                 SOB_PANIC("buffered_ch should've been consumed before num");
             }
             c->buffered_ch = ch;
-            _set_st(c, _st_idle);
+            set_st_(c, st_idle_);
             return rjson_next_ok;
         } else {
             return rjson_next_syntax;
         }
     }
 
-    if (c->num_part == _num_part_int && ch == '0' && c->num_digit_pos == 0) {
-        c->num_part = _num_part_leading_zero;
+    if (c->num_part == num_part_int_ && ch == '0' && c->num_digit_pos == 0) {
+        c->num_part = num_part_leading_zero_;
         return rjson_next_ok;
     }
 
     switch (c->num_part) {
-    case _num_part_leading_zero:
+    case num_part_leading_zero_:
         if (ch == '.') {
-            c->num_part = _num_part_frac;
+            c->num_part = num_part_frac_;
             return rjson_next_ok;
         } else {
             return rjson_next_syntax;
         }
         break;
-    case _num_part_int:
+    case num_part_int_:
         if (ch == '-') {
             if (c->num_digit_pos == 0) {
                 c->num_is_neg = 1;
@@ -522,7 +522,7 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
         } else if (ch == '.') {
             if (c->num_digit_pos > 0) {
                 c->num_digit_pos = 0;
-                c->num_part = _num_part_frac;
+                c->num_part = num_part_frac_;
                 return rjson_next_ok;
             } else {
                 return rjson_next_syntax;
@@ -530,7 +530,7 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
         } else if (ch == 'e' || ch == 'E') {
             if (c->num_digit_pos > 0) {
                 c->num_digit_pos = 0;
-                c->num_part = _num_part_exp;
+                c->num_part = num_part_exp_;
                 return rjson_next_ok;
             } else {
                 return rjson_next_syntax;
@@ -544,13 +544,13 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
             return rjson_next_syntax;
         }
         break;
-    case _num_part_frac:
+    case num_part_frac_:
         if (ch == 'e' || ch == 'E') {
             if (c->num_digit_pos > 0) {
                 c->num_digit_pos = 0;
                 c->num_is_neg = 0;
                 c->num_exp = 0;
-                c->num_part = _num_part_exp;
+                c->num_part = num_part_exp_;
                 return rjson_next_ok;
             } else {
                 return rjson_next_syntax;
@@ -565,7 +565,7 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
             return rjson_next_syntax;
         }
         break;
-    case _num_part_exp:
+    case num_part_exp_:
         if (ch == '+') {
             if (c->num_digit_pos == 0) {
                 c->num_is_neg = 0;
@@ -594,20 +594,20 @@ enum rjson_next_res _next_num(struct rjson_ctx * c, char ch) {
     return rjson_next_ok;
 }
 
-enum rjson_next_res _next_bool(struct rjson_ctx * c, char ch,
+enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
         const char * word);
 
-enum rjson_next_res _next_true(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_true);
-    return _next_bool(c, ch, "true");
+enum rjson_next_res next_true_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_true_);
+    return next_bool_(c, ch, "true");
 }
 
-enum rjson_next_res _next_false(struct rjson_ctx * c, char ch) {
-    _assert_st(c, _st_false);
-    return _next_bool(c, ch, "false");
+enum rjson_next_res next_false_(struct rjson_ctx * c, char ch) {
+    assert_st_(c, st_false_);
+    return next_bool_(c, ch, "false");
 }
 
-enum rjson_next_res _next_null(struct rjson_ctx * c, char ch) {
+enum rjson_next_res next_null_(struct rjson_ctx * c, char ch) {
     const char * word = "null";
 
     if (ch != word[c->special_word_pos]) {
@@ -615,7 +615,7 @@ enum rjson_next_res _next_null(struct rjson_ctx * c, char ch) {
     }
     if (c->special_word_pos == strlen(word) - 1) {
         c->cur = rjson_null;
-        _set_st(c, _st_idle);
+        set_st_(c, st_idle_);
     } else {
         c->special_word_pos++;
     }
@@ -623,14 +623,14 @@ enum rjson_next_res _next_null(struct rjson_ctx * c, char ch) {
     return rjson_next_ok;
 }
 
-enum rjson_next_res _next_bool(struct rjson_ctx * c, char ch,
+enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
         const char * word) {
     if (ch != word[c->special_word_pos]) {
         return rjson_next_syntax;
     }
     if (c->special_word_pos == strlen(word) - 1) {
         c->cur = rjson_bool;
-        _set_st(c, _st_idle);
+        set_st_(c, st_idle_);
     } else {
         c->special_word_pos++;
     }
@@ -638,46 +638,46 @@ enum rjson_next_res _next_bool(struct rjson_ctx * c, char ch,
     return rjson_next_ok;
 }
 
-enum _add_str_ch_res _add_str_ch(struct rjson_ctx * c, char ch) {
+enum add_str_ch_res_ add_str_ch_(struct rjson_ctx * c, char ch) {
     if (c->str_len == c->str_mlen) {
-        return _add_ch_overflow;
+        return add_ch_overflow_;
     } else {
         c->str[c->str_len] = ch;
         c->str_len++;
-        return _add_ch_ok;
+        return add_ch_ok_;
     }
 }
 
-enum _str_escape_res _str_escape(char * ch) {
+enum str_escape_res_ str_escape_(char * ch) {
     switch (*ch) {
     case 'u':
-        return _str_escape_utf16;
+        return str_escape_utf16_;
     case '\"':
         *ch = '\"';
-        return _str_escaped;
+        return str_escaped_;
     case '\\':
         *ch = '\\';
-        return _str_escaped;
+        return str_escaped_;
     case '/':
         *ch = '/';
-        return _str_escaped;
+        return str_escaped_;
     case 'b':
         *ch = '\b';
-        return _str_escaped;
+        return str_escaped_;
     case 'f':
         *ch = '\f';
-        return _str_escaped;
+        return str_escaped_;
     case 'n':
         *ch = '\n';
-        return _str_escaped;
+        return str_escaped_;
     case 'r':
         *ch = '\r';
-        return _str_escaped;
+        return str_escaped_;
     case 't':
         *ch = '\t';
-        return _str_escaped;
+        return str_escaped_;
     default:
-        return _str_escape_invalid;
+        return str_escape_invalid_;
     };
 }
 
@@ -686,7 +686,7 @@ enum _str_escape_res _str_escape(char * ch) {
 #include <stdio.h>
 
 enum {
-    _str_buf_mlen = 120
+    str_buf_mlen_ = 120
 };
 
 int main(int argc, char ** argv) {
@@ -694,14 +694,14 @@ int main(int argc, char ** argv) {
         "\t\"a\": {\"b\": true, \"c\": [[-228, 123], 0.314e1, 420228e-03]}}";
 
     int i;
-    char str_buf[_str_buf_mlen];
+    char str_buf[str_buf_mlen_];
     struct rjson_ctx c;
 
     if (argc > 1) {
         str = argv[1];
     }
 
-    rjson_init(&c, str_buf, _str_buf_mlen);
+    rjson_init(&c, str_buf, str_buf_mlen_);
 
     printf("str: '%s'\n", str);
 
