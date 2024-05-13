@@ -394,7 +394,11 @@ enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch)
         set_st_(c, st_idle_);
         pop_lvl_(c);
         c->cur = rjson_obj_end;
-        return rjson_next_ok;
+        if (lvl_(c) == lvl_none_) {
+            return rjson_next_fin;
+        } else {
+            return rjson_next_ok;
+        }
     case '{':
     case '[':
     case ']':
@@ -740,8 +744,7 @@ int main(int argc, char ** argv)
                 rjson_pos(&c), str[i]);
             return 1;
         } else if (nres == rjson_next_fin) {
-            printf("fin\n");
-            i = strlen(str) + 1; /* kinda hacky but whatever */
+            /* handled at the end of the block */
         } else { }
 
         switch (rjson_cur_ty(&c)) {
@@ -773,6 +776,11 @@ int main(int argc, char ** argv)
                 printf("] arr\n");
                 break;
         };
+
+        if (nres == rjson_next_fin) {
+            printf("fin\n");
+            break;
+        }
     }
 
 
