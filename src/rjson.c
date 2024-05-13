@@ -73,7 +73,7 @@ struct rjson_ctx {
     int special_word_pos; /* for true, false, null */
     int bool_is_true;
 
-    char buffered_ch;
+    int buffered_ch; /* -1 means nothing buffered */
 
     enum rjson_ty cur;
 
@@ -97,7 +97,7 @@ void rjson_init(struct rjson_ctx * c, char * str_out_buf, size_t str_mlen)
     c->num_part = num_part_int_;
     c->special_word_pos = 0;
     c->bool_is_true = 0;
-    c->buffered_ch = '\0';
+    c->buffered_ch = -1;
     c->cur = rjson_incomplete;
     set_st_(c, st_idle_);
     c->is_val_expected = 0;
@@ -108,11 +108,11 @@ enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch)
 {
     enum rjson_next_res r;
 
-    if (c->buffered_ch != '\0') {
+    if (c->buffered_ch != -1) { /* one behind after num ended */
         char prev_ch = ch;
         ch = c->buffered_ch;
-        c->buffered_ch = prev_ch;
         c->pos++;
+        c->buffered_ch = (int) prev_ch;
     }
 
     if (ch == '\0') {
@@ -150,7 +150,7 @@ enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch)
         break;
     };
 
-    if (c->buffered_ch == '\0') {
+    if (c->buffered_ch == -1) {
         c->pos++;
     } else if (r == rjson_next_ok && c->cur == rjson_incomplete) {
         c->pos++;
@@ -510,7 +510,7 @@ static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch)
                 c->num *= pow(10.0, c->num_exp);
             }
             c->cur = rjson_num;
-            if (c->buffered_ch != '\0') {
+            if (c->buffered_ch != -1) {
                 SOB_PANIC("buffered_ch should've been consumed before num");
             }
             c->buffered_ch = ch;
