@@ -100,7 +100,7 @@ void rjson_init(struct rjson_ctx * c, char * str_out_buf, size_t str_mlen)
     c->buffered_ch = -1;
     c->cur = rjson_incomplete;
     set_st_(c, st_idle_);
-    c->is_val_expected = 0;
+    c->is_val_expected = 1; /* otherwise toplevel obj will be return an erorr */
     c->pos = 0;
 }
 
@@ -286,37 +286,47 @@ static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch)
         return rjson_next_syntax;
     }
 
-    if (strchr("true", ch)) {
-        c->is_val_expected = 0;
-        set_st_(c, st_true_);
-        return next_true_(c, ch);
-    } else if (strchr("false", ch)) {
-        c->is_val_expected = 0;
-        set_st_(c, st_false_);
-        return next_false_(c, ch);
-    } else if (strchr("null", ch)) {
-        c->is_val_expected = 0;
-        set_st_(c, st_null_);
-        return next_null_(c, ch);
-    } else if (is_num_start_(ch)) {
-        c->is_val_expected = 0;
-        set_st_(c, st_num_);
-        return next_num_(c, ch);
+    if (c->is_val_expected) {
+        if (strchr("true", ch)) {
+            c->is_val_expected = 0;
+            set_st_(c, st_true_);
+            return next_true_(c, ch);
+        } else if (strchr("false", ch)) {
+            c->is_val_expected = 0;
+            set_st_(c, st_false_);
+            return next_false_(c, ch);
+        } else if (strchr("null", ch)) {
+            c->is_val_expected = 0;
+            set_st_(c, st_null_);
+            return next_null_(c, ch);
+        } else if (is_num_start_(ch)) {
+            c->is_val_expected = 0;
+            set_st_(c, st_num_);
+            return next_num_(c, ch);
+        }
     }
 
     switch (ch) {
     case '{':
-        add_lvl_(c, lvl_obj_);
-        set_st_(c, st_want_key_);
-        c->cur = rjson_obj_start;
-        c->is_val_expected = 0;
-        return rjson_next_ok;
+        if (c->is_val_expected) {
+            add_lvl_(c, lvl_obj_);
+            set_st_(c, st_want_key_);
+            c->cur = rjson_obj_start;
+            c->is_val_expected = 0;
+            return rjson_next_ok;
+        } else {
+            return rjson_next_syntax;
+        }
     case '[':
-        add_lvl_(c, lvl_arr_);
-        set_st_(c, st_idle_);
-        c->cur = rjson_arr_start;
-        c->is_val_expected = 0;
-        return rjson_next_ok;
+        if (c->is_val_expected) {
+            add_lvl_(c, lvl_arr_);
+            set_st_(c, st_idle_);
+            c->cur = rjson_arr_start;
+            c->is_val_expected = 1;
+            return rjson_next_ok;
+        } else {
+            return rjson_next_syntax;
+        }
     case '}':
         if (lvl_(c) == lvl_obj_) {
             if (! c->is_val_expected) {
@@ -348,10 +358,14 @@ static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch)
             return rjson_next_syntax;
         }
     case '"':
-        set_st_(c, st_str_);
-        c->cur = rjson_incomplete;
-        c->is_val_expected = 0;
-        return rjson_next_ok;
+        if (c->is_val_expected) {
+            set_st_(c, st_str_);
+            c->cur = rjson_incomplete;
+            c->is_val_expected = 0;
+            return rjson_next_ok;
+        } else {
+            return rjson_next_syntax;
+        }
     case ',':
         if (! c->is_val_expected) {
             c->is_val_expected = 1;
@@ -413,6 +427,9 @@ enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch)
 {
     assert_st_(c, st_want_colon_);
     assert_lvl_(c, lvl_obj_);
+    if (c->is_val_expected) {
+        SOB_PANIC("next_want_colon_: is_val_expected cannot be true here");
+    }
 
     if (is_whitespace_(ch)) {
         return rjson_next_ok;
