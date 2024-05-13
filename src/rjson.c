@@ -32,9 +32,10 @@ static void set_st_(struct rjson_ctx * c, enum st_ st);
 
 static void add_lvl_(struct rjson_ctx * c, enum level_ty_ ty);
 static void pop_lvl_(struct rjson_ctx * c);
-static enum level_ty_ lvl_(struct rjson_ctx * c);
-static void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected);
-static void assert_st_(struct rjson_ctx * c, enum st_ expected);
+static enum level_ty_ lvl_(const struct rjson_ctx * c);
+static void assert_lvl_(const struct rjson_ctx * c, enum level_ty_ expected);
+static void assert_st_(const struct rjson_ctx * c, enum st_ expected);
+static void assert_is_val_expected_(const struct rjson_ctx * c, int expected);
 
 static int is_whitespace_(char ch);
 static int is_num_start_(char ch);
@@ -254,7 +255,7 @@ static void pop_lvl_(struct rjson_ctx * c)
     c->lvls_len--;
 }
 
-static enum level_ty_ lvl_(struct rjson_ctx * c)
+static enum level_ty_ lvl_(const struct rjson_ctx * c)
 {
     if (c->lvls_len == 0) {
         return lvl_none_;
@@ -262,17 +263,25 @@ static enum level_ty_ lvl_(struct rjson_ctx * c)
     return c->lvls[c->lvls_len - 1];
 }
 
-static void assert_lvl_(struct rjson_ctx * c, enum level_ty_ expected)
+static void assert_lvl_(const struct rjson_ctx * c, enum level_ty_ expected)
 {
     if (lvl_(c) != expected) {
         SOB_PANIC("assert_lvl_: expected %i but got %i", lvl_(c), expected);
     }
 }
 
-static void assert_st_(struct rjson_ctx * c, enum st_ expected)
+static void assert_st_(const struct rjson_ctx * c, enum st_ expected)
 {
     if (c->st != expected) {
         SOB_PANIC("assert_st_: expected %i but got %i", c->st, expected);
+    }
+}
+
+static void assert_is_val_expected_(const struct rjson_ctx * c, int expected)
+{
+    if (c->is_val_expected != expected) {
+        SOB_PANIC("assert_is_val_expected_: %i != %i in state %i",
+                c->is_val_expected, expected, c->st);
     }
 }
 
@@ -306,19 +315,15 @@ static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch)
 
     if (c->is_val_expected) {
         if (strchr("true", ch)) {
-            c->is_val_expected = 0;
             set_st_(c, st_true_);
             return next_true_(c, ch);
         } else if (strchr("false", ch)) {
-            c->is_val_expected = 0;
             set_st_(c, st_false_);
             return next_false_(c, ch);
         } else if (strchr("null", ch)) {
-            c->is_val_expected = 0;
             set_st_(c, st_null_);
             return next_null_(c, ch);
         } else if (is_num_start_(ch)) {
-            c->is_val_expected = 0;
             set_st_(c, st_num_);
             return next_num_(c, ch);
         }
@@ -327,10 +332,10 @@ static enum rjson_next_res next_idle_(struct rjson_ctx * c, char ch)
     switch (ch) {
     case '{':
         if (c->is_val_expected) {
+            c->is_val_expected = 1;
             add_lvl_(c, lvl_obj_);
             set_st_(c, st_want_key_);
             c->cur = rjson_obj_start;
-            c->is_val_expected = 0;
             return rjson_next_ok;
         } else {
             return rjson_next_syntax;
@@ -411,6 +416,7 @@ enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch)
 {
     assert_st_(c, st_want_key_);
     assert_lvl_(c, lvl_obj_);
+    assert_is_val_expected_(c, 1);
 
     if (is_whitespace_(ch)) {
         return rjson_next_ok;
@@ -445,9 +451,7 @@ enum rjson_next_res next_want_colon_(struct rjson_ctx * c, char ch)
 {
     assert_st_(c, st_want_colon_);
     assert_lvl_(c, lvl_obj_);
-    if (c->is_val_expected) {
-        SOB_PANIC("next_want_colon_: is_val_expected cannot be true here");
-    }
+    assert_is_val_expected_(c, 0);
 
     if (is_whitespace_(ch)) {
         return rjson_next_ok;
@@ -511,6 +515,7 @@ static enum rjson_next_res next_str_(struct rjson_ctx * c, char ch)
     } else if (ch == '"') { /* end of string */
         ch = '\0';
         c->cur = rjson_str;
+        c->is_val_expected = 0;
         if (c->str_is_key) {
             set_st_(c, st_want_colon_);
         } else {
@@ -538,6 +543,7 @@ static enum rjson_next_res next_str_(struct rjson_ctx * c, char ch)
 static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch)
 {
     assert_st_(c, st_num_);
+    assert_is_val_expected_(c, 1);
 
     if (is_whitespace_(ch) || ch == '}' || ch == ']' || ch == ',') {
         if (c->num_digit_pos > 0) {
@@ -549,6 +555,7 @@ static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch)
                 SOB_PANIC("buffered_ch should've been consumed before num");
             }
             c->buffered_ch = ch;
+            c->is_val_expected = 0;
             set_st_(c, st_idle_);
             return rjson_next_ok;
         } else {
@@ -670,6 +677,8 @@ static enum rjson_next_res next_false_(struct rjson_ctx * c, char ch)
 
 static enum rjson_next_res next_null_(struct rjson_ctx * c, char ch)
 {
+    assert_st_(c, st_null_);
+    assert_is_val_expected_(c, 1);
     const char * word = "null";
 
     if (ch != word[c->special_word_pos]) {
@@ -677,6 +686,7 @@ static enum rjson_next_res next_null_(struct rjson_ctx * c, char ch)
     }
     if (c->special_word_pos == strlen(word) - 1) {
         c->cur = rjson_null;
+        c->is_val_expected = 0;
         set_st_(c, st_idle_);
     } else {
         c->special_word_pos++;
@@ -688,11 +698,14 @@ static enum rjson_next_res next_null_(struct rjson_ctx * c, char ch)
 static enum rjson_next_res next_bool_(struct rjson_ctx * c, char ch,
     const char * word)
 {
+    assert_is_val_expected_(c, 1);
+
     if (ch != word[c->special_word_pos]) {
         return rjson_next_syntax;
     }
     if (c->special_word_pos == strlen(word) - 1) {
         c->cur = rjson_bool;
+        c->is_val_expected = 0;
         set_st_(c, st_idle_);
     } else {
         c->special_word_pos++;
