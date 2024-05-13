@@ -106,16 +106,18 @@ void rjson_init(struct rjson_ctx * c, char * str_out_buf, size_t str_mlen)
 
 enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch)
 {
+    int processed_buffered = 0;
     enum rjson_next_res r;
 
     if (c->buffered_ch != -1) { /* one behind after num ended */
         char prev_ch = ch;
         ch = c->buffered_ch;
-        c->pos++;
         c->buffered_ch = (int) prev_ch;
+        processed_buffered = 1;
     }
 
     if (ch == '\0') {
+        /* see also simmilar check with buffered_ch at the bottom */
         if (lvl_(c) == lvl_none_) {
             return rjson_next_fin;
         } else {
@@ -150,14 +152,30 @@ enum rjson_next_res rjson_next(struct rjson_ctx * c, char ch)
         break;
     };
 
-    if (c->buffered_ch == -1) {
-        c->pos++;
-    } else if (r == rjson_next_ok && c->cur == rjson_incomplete) {
-        c->pos++;
-        char last_buffered_ch = c->buffered_ch;
-        c->buffered_ch = '\0';
-        return rjson_next(c, last_buffered_ch);
+    /* XXX: this whole thing with buffered_ch feels like a hack */
+    if (processed_buffered || c->buffered_ch == -1) {
+        /* removed one from buffer or not added this char to buffer */
+        if (r != rjson_next_syntax) { /* to report pos of the error cause */
+            c->pos++;
+        }
     }
+    if (c->buffered_ch != -1) {
+        if (r == rjson_next_ok && c->cur == rjson_incomplete) {
+            /* nothing to report so process buffered to not fall behind more */
+            char last_buffered_ch = (char) c->buffered_ch; /* cannot be -1 */
+            c->buffered_ch = -1;
+            return rjson_next(c, last_buffered_ch);
+        } else if (r == rjson_next_ok && c->buffered_ch == '\0') {
+            /* like {"a": [42]\0 - arr_end will be emited at '\0' so we 
+             * will have no other chance to report missing '}' */
+            /* see also similar check with ch at the top */
+            if (lvl_(c) != lvl_none_) {
+                /* discard whatever c->cur we had */
+                return rjson_next_syntax;
+            }
+        }
+    }
+
     return r;
 }
 
@@ -521,7 +539,7 @@ static enum rjson_next_res next_num_(struct rjson_ctx * c, char ch)
 {
     assert_st_(c, st_num_);
 
-    if (is_whitespace_(ch) || (strchr("}],", ch) && ch != '\0')) {
+    if (is_whitespace_(ch) || ch == '}' || ch == ']' || ch == ',') {
         if (c->num_digit_pos > 0) {
             if (c->num_part == num_part_exp_) {
                 c->num *= pow(10.0, c->num_exp);
@@ -758,7 +776,7 @@ int main(int argc, char ** argv)
 
         if (nres == rjson_next_syntax) {
             fprintf(stderr, "syntax error @ %lu ('%c')\n",
-                rjson_pos(&c), str[i]);
+                rjson_pos(&c), str[rjson_pos(&c)]);
             return 1;
         } else if (nres == rjson_next_fin) {
             /* handled at the end of the block */
