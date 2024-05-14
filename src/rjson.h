@@ -32,7 +32,7 @@ size_t rjson_pos(const struct rjson_ctx * c);
 enum rjson_ty rjson_cur_ty(const struct rjson_ctx * c);
 const char * rjson_cur_str(const struct rjson_ctx * c);
 double rjson_cur_num(const struct rjson_ctx * c);
-int rjson_cur_is_true(const struct rjson_ctx * c); /* 1 - true, 0 - false */
+int rjson_cur_is_true(const struct rjson_ctx * c);
 
 #endif /* SOB_RJSON_H_SENTRY */
 

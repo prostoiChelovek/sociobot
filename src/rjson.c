@@ -430,6 +430,7 @@ enum rjson_next_res next_want_key_(struct rjson_ctx * c, char ch)
         set_st_(c, st_idle_);
         pop_lvl_(c);
         c->cur = rjson_obj_end;
+        c->is_val_expected = 0;
         if (lvl_(c) == lvl_none_) {
             return rjson_next_fin;
         } else {
