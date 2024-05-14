@@ -10,4 +10,5 @@ deps.mk
 src/main
 src/https_demo
 src/rjson_demo
+src/wjson_demo
 

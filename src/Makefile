@@ -6,7 +6,7 @@ STATIC = -static
 AR = ar
 
 BINARIES = main
-SRC_MOD = main.c tg.c rjson.c https.c panic.c
+SRC_MOD = main.c tg.c wjson.c rjson.c https.c panic.c
 OBJ_MOD = $(SRC_MOD:.c=.o)
 
 LIBS = -I../lib/curl/include \
@@ -28,8 +28,11 @@ main:	$(OBJ_MOD) $(LIBDEPS) $(CC)
 https_demo: https.c https.h panic.o $(LIBDEPS) $(CC)
 	$(CC) $(CFLAGS) $(STATIC) https.c $(LIBS) -D SOB_HTTPS_DEMO -o $@ panic.o
 
-rjson_demo: rjson.c rjson.h panic.o $(LIBDEPS) $(CC)
+rjson_demo: rjson.c rjson.h panic.o $(CC)
 	$(CC) $(CFLAGS) $(STATIC) rjson.c -D SOB_RJSON_DEMO -o $@ panic.o
+
+wjson_demo: wjson.c wjson.h panic.o $(CC)
+	$(CC) $(CFLAGS) $(STATIC) wjson.c -D SOB_WJSON_DEMO -o $@ panic.o
 
 $(CC):
 	$(MAKE) -C ../lib musl/inst/bin/musl-gcc
@@ -41,7 +44,7 @@ deps.mk:	$(CC) $(wildcard *.c)
 	$(CC) -MM $(wildcard *.c) > $@
 
 clean:
-	rm -rf *.o *~ $(BINARIES) deps.mk https_demo rjson_demo
+	rm -rf *.o *~ $(BINARIES) deps.mk https_demo rjson_demo wjson_demo
 
 ifneq (clean, $(MAKECMDGOALS))
 -include deps.mk
