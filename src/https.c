@@ -55,6 +55,9 @@ static int write_cb_(char * data, size_t throwaway, size_t len,
 
 struct https_mod {
     enum st_ st;
+    enum https_stop_strategy stop_strat;
+    int is_stop_waiting;
+
     CURLcode curl_err; /* check when st_err_ */
     CURLMcode curlm_err; /* check when st_err_ */
 
@@ -80,6 +83,9 @@ enum https_init_res https_init(struct https_mod * m,
     char * resp_out, size_t resp_maxlen)
 {
     m->st = st_just_init_;
+    m->stop_strat = https_stop_strat_wait;
+    m->is_stop_waiting = 0;
+
     m->curl_err = CURLE_OK;
     m->curlm_err = CURLM_OK;
     m->evs_len = 0;
@@ -140,24 +146,49 @@ enum https_init_res https_init(struct https_mod * m,
 
 enum https_stop_prep_res https_stop_prep(struct https_mod * m)
 {
-    if (m->st == st_pend_) {
-        curl_multi_remove_handle(m->curlm, m->curl);
-    }
-
-    if (set_st_(m, st_stopped_) != set_st_ok_) {
-        SOB_PANIC("set_st_(st_stopped_) in https_stop_prep");
-    }
-    return https_stop_prep_ok;
+    switch (m->stop_strat) {
+    case https_stop_strat_abort:
+        if (m->st == st_pend_) {
+            curl_multi_remove_handle(m->curlm, m->curl);
+        }
+        if (set_st_(m, st_stopped_) != set_st_ok_) {
+            SOB_PANIC("set_st_(st_stopped_) in https_stop_prep");
+        }
+        m->is_stop_waiting = 0;
+        return https_stop_prep_ok;
+    case https_stop_strat_wait:
+        if (! m->is_stop_waiting) {
+            if (m->st == st_pend_) {
+                m->is_stop_waiting = 1;
+                return https_stop_prep_ok;
+            } else {
+                if (set_st_(m, st_stopped_) != set_st_ok_) {
+                    SOB_PANIC("set_st_(st_stopped_) in https_stop_prep");
+                }
+                return https_stop_prep_ok;
+            }
+        } else {
+            return https_stop_prep_ok;
+        }
+        break;
+    };
+    SOB_PANIC("unreacheable");
+    return https_stop_prep_fail;
 }
 
 enum https_stop_res https_stop(struct https_mod * m)
 {
-    m->st = st_uninit_;
-    curl_easy_cleanup(m->curl);
-    curl_multi_cleanup(m->curlm);
-    curl_slist_free_all(m->json_hdrs);
-    close(m->timerfd);
-    return https_stop_ok;
+    if (m->st == st_stopped_) {
+        m->st = st_uninit_;
+        curl_easy_cleanup(m->curl);
+        curl_multi_cleanup(m->curlm);
+        curl_slist_free_all(m->json_hdrs);
+        close(m->timerfd);
+
+        return https_stop_ok;
+    } else {
+        return https_stop_fail_no_prep;
+    }
 }
 
 size_t https_pollfds(struct https_mod * m, struct pollfd ** fds_out)
@@ -260,6 +291,16 @@ void https_update(struct https_mod * m, struct pollfd * fds, nfds_t nfds)
                         }
                         curl_multi_remove_handle(m->curlm, m->curl);
 
+                        if (m->is_stop_waiting) {
+                            m->is_stop_waiting = 0;
+                            if (set_st_(m, st_stopped_) != set_st_ok_) {
+                                SOB_PANIC("set_st_(st_stopped_)");
+                            }
+                            if (add_ev_(m, https_ev_stopped) != add_ev_ok_ ) {
+                                SOB_PANIC("add_ev_(https_ev_stopped)");
+                            }
+                        }
+
                         return;
                     } else {
                         m->curl_err = cmsg->data.result;
@@ -301,12 +342,20 @@ void https_set_verbosity(struct https_mod * m, enum https_verbosity level)
     };
 }
 
+void https_set_stop_strat(struct https_mod * m, enum https_stop_strategy s)
+{
+    m->stop_strat = s;
+}
+
 enum https_req_res https_req_json(struct https_mod * m,
     enum https_req_method method, const char * url,
     const char * data)
 {
     if (m->st != st_idle_ ) {
         return https_req_fail_other_pend;
+    }
+    if (m->is_stop_waiting) {
+        return https_req_fail_stopping;
     }
 
     switch (method) {
@@ -613,6 +662,10 @@ init:
         evs_len = https_events(&m, &evs);
         for (i = 0; i < evs_len; i++) {
             switch (https_ev_ty(&evs[i])) {
+            case https_ev_stopped:
+                printf("stop\n");
+                goto stopped;
+                break;
             case https_ev_req_data:
                 printf("recv: '%s'\n", data);
                 break;

@@ -57,7 +57,14 @@ enum https_verbosity {
 };
 void https_set_verbosity(struct https_mod * mod, enum https_verbosity level);
 
+enum https_stop_strategy {
+    https_stop_strat_abort,
+    https_stop_strat_wait
+};
+void https_set_stop_strat(struct https_mod * mod, enum https_stop_strategy s);
+
 enum https_req_res {
+    https_req_fail_stopping = -3,
     https_req_fail_other_pend = -2,
     https_req_fail = -1,
     https_req_ok = 1
