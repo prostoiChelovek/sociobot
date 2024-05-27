@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <poll.h>
 
+typedef void (*https_resp_data_cb)(const char * resp, size_t len, void * user);
+
 struct https_mod;
 
 struct https_ev;
@@ -12,7 +14,6 @@ enum https_ev_type {
     https_ev_init,
     https_ev_init_fail,
     https_ev_stopped,
-    https_ev_req_data,
     https_ev_req_fin, /* always after https_ev_req_data */
     https_ev_req_fail
 };
@@ -30,7 +31,7 @@ enum https_init_res {
     https_init_fail_curl_multi_init = -1,
     https_init_ok = 1
 } https_init(struct https_mod * mod,
-    char * resp_out, size_t resp_maxlen);
+    https_resp_data_cb data_cb, void * data_cb_user);
 
 enum https_stop_prep_res {
     https_stop_prep_fail = -1,
@@ -72,18 +73,6 @@ enum https_req_res {
     enum https_req_method method, const char * url, const char * data);
 
 long https_resp_status(const struct https_mod * mod);
-
-size_t https_resp_len(const struct https_mod * mod);
-
-/*
-null terminated.
-returns resp_out passed to https_init.
-returns same value before https_update.
-returns new data after https_update if this function was called.
-returns old + new data after https_update if this function was not called.
-*/
-char * https_resp_data(struct https_mod * mod);
-
 
 enum https_ev_type https_ev_ty(const struct https_ev * ev);
 

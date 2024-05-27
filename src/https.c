@@ -64,9 +64,8 @@ struct https_mod {
     struct https_ev evs[evs_maxlen_];
     size_t evs_len;
 
-    char * resp_out;
-    size_t resp_mlen;
-    size_t resp_len;
+    https_resp_data_cb data_cb;
+    void * data_cb_user;
     long resp_status;
 
     struct pollfd fds[fds_maxlen_];
@@ -79,8 +78,9 @@ struct https_mod {
     struct curl_slist * json_hdrs;
 };
 
-enum https_init_res https_init(struct https_mod * m,
-    char * resp_out, size_t resp_maxlen)
+enum https_init_res https_init(
+    struct https_mod * m,
+    https_resp_data_cb data_cb, void * data_cb_user)
 {
     m->st = st_just_init_;
     m->stop_strat = https_stop_strat_wait;
@@ -90,14 +90,8 @@ enum https_init_res https_init(struct https_mod * m,
     m->curlm_err = CURLM_OK;
     m->evs_len = 0;
 
-    m->resp_out = resp_out;
-    m->resp_mlen = resp_maxlen;
-    m->resp_len = 0;
-
-    if (m->resp_mlen > 0) {
-        m->resp_out[0] = '\0';
-        m->resp_mlen -= 1; /* for '\0' */
-    }
+    m->data_cb = data_cb;
+    m->data_cb_user = data_cb_user;
 
     m->resp_status = 0;
 
@@ -218,7 +212,6 @@ void https_update(struct https_mod * m, struct pollfd * fds, nfds_t nfds)
     struct CURLMsg * cmsg = NULL;
     int still_running;
 
-    m->resp_len = 0;
     m->evs_len = 0;
 
     if (m->st == st_stopped_) {
@@ -383,16 +376,6 @@ long https_resp_status(const struct https_mod * m)
     return m->resp_status;
 }
 
-size_t https_resp_len(const struct https_mod * m)
-{
-    return m->resp_len;
-}
-
-char * https_resp_data(struct https_mod * m)
-{
-    return m->resp_out;
-}
-
 
 enum https_ev_type https_ev_ty(const struct https_ev * ev)
 {
@@ -484,28 +467,14 @@ static int write_cb_(char * data, size_t throwaway, size_t len,
     void * user_data)
 {
     struct https_mod * m = user_data;
-    size_t remain_len = m->resp_mlen - m->resp_len; /* mlen alwasy >= len */
-    size_t write_len = 0;
 
     (void) throwaway; /* "size" in man, always 1 */
 
-    if (len <= remain_len) {
-        write_len = len;
-    } else { /* len > remain_len */
-        write_len = remain_len;
+    if (m->data_cb != NULL) {
+        (*m->data_cb)(data, len, m->data_cb_user);
     }
 
-    memcpy((m->resp_out + m->resp_len), data, write_len);
-    m->resp_len += write_len;
-    if (m->resp_mlen > 0) {
-        m->resp_out[m->resp_len + 1] = '\0';
-    }
-
-    if (add_ev_(m, https_ev_req_data) != add_ev_ok_ ) {
-        SOB_PANIC("add_ev_(https_ev_req_data) in write_cb_");
-    }
-
-    return write_len;
+    return len;
 }
 
 
@@ -591,18 +560,21 @@ static enum add_ev_res_ add_ev_(struct https_mod * m, enum https_ev_type ty)
 #include <poll.h>
 
 enum {
-    evs_maxlen = 5,
-    resp_data_maxlen = 4096
+    evs_maxlen = 5
 };
+
+void data_cb(const char * resp, size_t len, void * user)
+{
+    printf("recv: '%.*s'\n", (int) len, resp);
+}
 
 int main(void)
 {
     int i;
     struct https_mod m;
-    char data[resp_data_maxlen];
     struct pollfd * fds;
 
-    if (https_init(&m, data, resp_data_maxlen) != https_init_ok ) {
+    if (https_init(&m, data_cb, NULL) != https_init_ok ) {
         fprintf(stderr, "cannot init\n");
         return 1;
     }
@@ -665,9 +637,6 @@ init:
             case https_ev_stopped:
                 printf("stop\n");
                 goto stopped;
-                break;
-            case https_ev_req_data:
-                printf("recv: '%s'\n", data);
                 break;
             case https_ev_req_fin:
                 printf("req completed\n");
