@@ -11,4 +11,6 @@ src/main
 src/https_demo
 src/rjson_demo
 src/wjson_demo
+src/tg_demo
+src/rdb_demo
 
