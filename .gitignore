@@ -14,4 +14,5 @@ src/wjson_demo
 src/tg_demo
 src/rdb_demo
 src/wdb_demo
+src/afs_demo
 

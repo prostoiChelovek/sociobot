@@ -44,6 +44,9 @@ rdb_demo: rdb.c rdb.h panic.o $(CC)
 wdb_demo: wdb.c wdb.h $(CC)
 	$(CC) $(CFLAGS) $(STATIC) wdb.c -D SOB_WDB_DEMO -o $@
 
+afs_demo: afs.c afs.h panic.o $(CC)
+	$(CC) $(CFLAGS) $(STATIC) afs.c -D SOB_AFS_DEMO -o $@ panic.o
+
 tg_demo: tg.c tg.h panic.o https.o rjson.o wjson.o $(LIBDEPS) $(CC)
 	$(CC) $(CFLAGS) $(STATIC) tg.c -D SOB_TG_DEMO -o $@ \
 		https.o rjson.o wjson.o panic.o $(LIBS)
@@ -59,7 +62,7 @@ deps.mk:	$(CC) $(wildcard *.c)
 
 clean:
 	rm -rf *.o *~ $(BINARIES) deps.mk https_demo rjson_demo wjson_demo \
-		tg_demo rdb_demo wdb_demo
+		tg_demo rdb_demo wdb_demo afs_demo
 
 ifneq (clean, $(MAKECMDGOALS))
 -include deps.mk
