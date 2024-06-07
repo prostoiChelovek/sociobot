@@ -31,7 +31,9 @@ enum afs_event {
     afs_ev_write,
     afs_ev_write_fail,
     afs_ev_readall,
-    afs_ev_readall_fail
+    afs_ev_readall_fail,
+    afs_ev_mkdir,
+    afs_ev_mkdir_fail
 };
 
 enum afs_res {
@@ -61,6 +63,8 @@ enum afs_res afs_get_rw_buf(struct afs_ctx * c,
 enum afs_res afs_write(struct afs_ctx * c, int fd_from_afs, size_t len);
 
 enum afs_res afs_readall(struct afs_ctx * c, int fd_from_afs);
+
+enum afs_res afs_mkdir(struct afs_ctx * c, const char * path, int * afs_fd_out);
 
 enum afs_res afs_stop_prep(struct afs_ctx * c);
 

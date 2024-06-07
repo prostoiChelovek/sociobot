@@ -1,4 +1,6 @@
-#define _XOPEN_SOURCE /* for fsync in glibc up to and including 2.15 */
+/* for fsync in glibc up to and including 2.15 */
+/* for realpath */
+#define _XOPEN_SOURCE 500
 
 #include "afs.h"
 #include "panic.h"
@@ -11,6 +13,7 @@
 #include <sys/socket.h> /* for socketpair */
 #include <sys/wait.h> /* for waitpid */
 #include <sys/mman.h> /* for mmap, munmap */
+#include <sys/stat.h> /* for mkdir */
 
 struct afs_ev {
     enum afs_event ty;
@@ -33,7 +36,8 @@ enum proc_cmd_ {
     proc_cmd_close_,
     proc_cmd_fsync_,
     proc_cmd_write_,
-    proc_cmd_readall_
+    proc_cmd_readall_,
+    proc_cmd_mkdir_
 };
 enum proc_res_ {
     proc_res_none_ = 0,
@@ -93,7 +97,7 @@ struct ps_ {
     int fd;
     struct proc_ p;
     struct ps_ * next;
-    int should_open_after_init;
+    enum proc_cmd_ cmd_after_init;
     int is_avail;
 };
 
@@ -122,6 +126,7 @@ struct afs_ctx {
         } \
     } while (0)
 
+static struct ps_ * maybe_alloc_ps_(struct afs_ctx * c, int * was_init_out);
 static struct ps_ * ps_add_(struct afs_ctx * c);
 static enum afs_res ps_del_(struct afs_ctx * c, int fd);
 static struct ps_ * ps_get_(struct afs_ctx * c, int fd);
@@ -141,6 +146,7 @@ static enum afs_res proc_close_(struct proc_ * p);
 static enum afs_res proc_fsync_(struct proc_ * p);
 static enum afs_res proc_write_(struct proc_ * p);
 static enum afs_res proc_readall_(struct proc_ * p);
+static enum afs_res proc_mkdir_(struct proc_ * p);
 
 static enum afs_res proc_update_init_pend_(struct proc_ * p, short revents);
 static enum afs_res proc_update_busy_(struct proc_ * p, short revents);
@@ -161,6 +167,8 @@ static enum proc_res_ proc_child_fsync_(struct proc_shared_ * s, int fd);
 static enum proc_res_ proc_child_write_(struct proc_shared_ * s, int fd,
     void * rw_buf, size_t rw_buf_len);
 static enum proc_res_ proc_child_readall_(struct proc_shared_ * s, int fd,
+    void * rw_buf, size_t rw_buf_len);
+static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
     void * rw_buf, size_t rw_buf_len);
 
 static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd);
@@ -215,15 +223,29 @@ void afs_update(struct afs_ctx * c,
             case afs_ev_init:
                 should_add_ev = 0;
                 ps->is_avail = 1;
-                if (ps->should_open_after_init) {
-                    ps->should_open_after_init = 0;
+                if (ps->cmd_after_init == proc_cmd_open_) {
                     enum afs_res ores = proc_open_(&ps->p);
                     if (ores != afs_ok) {
+                        memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
                         oev->fd = evs->fd;
                         oev->ty = afs_ev_open_fail;
                         SOB_AFS_UPD_ADD_EV_();
                     }
+                } else if (ps->cmd_after_init == proc_cmd_mkdir_) {
+                    enum afs_res ores = proc_mkdir_(&ps->p);
+                    if (ores != afs_ok) {
+                        memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+                        oev->fd = evs->fd;
+                        oev->ty = afs_ev_mkdir_fail;
+                        SOB_AFS_UPD_ADD_EV_();
+                    }
+                } else if (ps->cmd_after_init != proc_cmd_none_) {
+                    oev->fd = evs->fd;
+                    oev->ty = proc_cmd_fail_ev_(ps->cmd_after_init);
+                    SOB_AFS_UPD_ADD_EV_();
+                    SOB_AFS_FAIL_("bad cmd_after_init (no errno)");
                 }
+                ps->cmd_after_init = proc_cmd_none_;
                 break;
             case afs_ev_close:
             case afs_ev_close_fail:
@@ -234,12 +256,17 @@ void afs_update(struct afs_ctx * c,
             case afs_ev_init_fail:
                 should_add_ev = 0;
                 should_del = 1;
-                if (ps->should_open_after_init) {
-                    ps->should_open_after_init = 0;
+                if (ps->cmd_after_init != proc_cmd_none_) {
                     oev->fd = evs->fd;
-                    oev->ty = afs_ev_open_fail;
+                    oev->ty = proc_cmd_fail_ev_(ps->cmd_after_init);
                     SOB_AFS_UPD_ADD_EV_();
                 }
+                ps->cmd_after_init = proc_cmd_none_;
+                break;
+            case afs_ev_mkdir_fail:
+            case afs_ev_mkdir:
+                should_add_ev = 1;
+                ps->fd = -1;
                 break;
             /* do not del after ev_stop[_fail] because gotta call proc_stop */
             case afs_ev_stop:
@@ -252,6 +279,9 @@ void afs_update(struct afs_ctx * c,
                 should_add_ev = 1;
                 break;
             };
+            if (afs_ev_is_fail(evs)) {
+                memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+            }
             if (should_add_ev) {
                 should_add_ev = 0;
                 memcpy(oev, evs, sizeof(struct afs_ev));
@@ -301,38 +331,14 @@ enum afs_res afs_get_rw_buf(struct afs_ctx * c,
 enum afs_res afs_open(struct afs_ctx * c,
     const char * path, int flags, int * afs_fd_out)
 {
-    struct ps_ * ps = NULL;
-    int was_init = 0;
-
-    ps = ps_get_(c, -1);
-    if (ps != NULL) { /* reuse free proc */
-        if (ps->p.st == proc_st_uninit_) {
-            enum afs_res r = proc_init_(&ps->p);
-            was_init = 0;
-            if (r != afs_ok) {
-                /* ps->fd is still -1; will find the same one as ps_get_(-1) */
-                (void) ps_del_(c, -1);
-                return r;
-            }
-        } else {
-            was_init = 1;
-        }
-        ps->fd = ps_next_fd_(c);
-    } else {
-        enum afs_res r;
-        ps = ps_add_(c);
-        if (ps == NULL) {
-            return afs_fail_alloc;
-        }
-        was_init = 0;
-        r = proc_init_(&ps->p);
-        if (r != afs_ok) {
-            (void) ps_del_(c, ps->fd);
-            return r;
-        }
+    int was_init;
+    struct ps_ * ps = maybe_alloc_ps_(c, &was_init);
+    if (ps == NULL) {
+        return afs_fail_alloc;
     }
 
     if (strlen(path) + 1 > ps->p.rw_buf_len) {
+        SOB_AFS_FAIL_("path does not fit in rw_buf (no errno)");
         return afs_fail_bad_arg;
     }
 
@@ -347,10 +353,12 @@ enum afs_res afs_open(struct afs_ctx * c,
     strcpy(ps->p.rw_buf, path);
     ps->p.shared->open_flags = flags;
     if (was_init) {
-        return proc_open_(&ps->p);
+        enum afs_res r = proc_open_(&ps->p);
+        memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+        return r;
     } else {
         ps->is_avail = 0;
-        ps->should_open_after_init = 1;
+        ps->cmd_after_init = proc_cmd_open_;
         return afs_ok;
     }
 }
@@ -359,6 +367,7 @@ enum afs_res afs_close(struct afs_ctx * c, int fd_from_afs)
 {
     struct ps_ * ps = ps_get_(c, fd_from_afs);
     if (ps == NULL || ! ps->is_avail) {
+        SOB_AFS_FAIL_("bad fd (no errno)");
         return afs_fail_bad_fd;
     }
     return proc_close_(&ps->p);
@@ -368,6 +377,7 @@ enum afs_res afs_fsync(struct afs_ctx * c, int fd_from_afs)
 {
     struct ps_ * ps = ps_get_(c, fd_from_afs);
     if (ps == NULL || ! ps->is_avail) {
+        SOB_AFS_FAIL_("bad fd (no errno)");
         return afs_fail_bad_fd;
     }
     return proc_fsync_(&ps->p);
@@ -395,6 +405,39 @@ enum afs_res afs_readall(struct afs_ctx * c, int fd_from_afs)
         return afs_fail_bad_fd;
     }
     return proc_readall_(&ps->p);
+}
+
+enum afs_res afs_mkdir(struct afs_ctx * c, const char * path, int * afs_fd_out)
+{
+    int was_init;
+    struct ps_ * ps = maybe_alloc_ps_(c, &was_init);
+    if (ps == NULL) {
+        return afs_fail_alloc;
+    }
+
+    if (strlen(path) + 1 > ps->p.rw_buf_len) {
+        SOB_AFS_FAIL_("path does not fit in rw_buf (no errno)");
+        return afs_fail_bad_arg;
+    }
+
+    *afs_fd_out = ps->fd;
+
+    if (ps->p.rw_buf == NULL) {
+        SOB_PANIC("rw_buf is NULL");
+    }
+    if (ps->p.shared == NULL) {
+        SOB_PANIC("shared is NULL");
+    }
+    strcpy(ps->p.rw_buf, path);
+    if (was_init) {
+        enum afs_res r = proc_mkdir_(&ps->p);
+        memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+        return r;
+    } else {
+        ps->is_avail = 0;
+        ps->cmd_after_init = proc_cmd_mkdir_;
+        return afs_ok;
+    }
 }
 
 enum afs_res afs_stop_prep(struct afs_ctx * c)
@@ -493,6 +536,7 @@ int afs_ev_is_fail(const struct afs_ev * ev)
     case afs_ev_fsync_fail:
     case afs_ev_write_fail:
     case afs_ev_readall_fail:
+    case afs_ev_mkdir_fail:
         return 1;
     case afs_ev_init:
     case afs_ev_stop:
@@ -501,6 +545,7 @@ int afs_ev_is_fail(const struct afs_ev * ev)
     case afs_ev_fsync:
     case afs_ev_write:
     case afs_ev_readall:
+    case afs_ev_mkdir:
         return 0;
     }
     SOB_PANIC("unreacheable");
@@ -553,8 +598,47 @@ const char * afs_event_str(enum afs_event event)
         return "afs_ev_readall";
     case afs_ev_readall_fail:
         return "afs_ev_readall_fail";
+    case afs_ev_mkdir:
+        return "afs_ev_mkdir";
+    case afs_ev_mkdir_fail:
+        return "afs_ev_mkdir_fail";
     }
     return "";
+}
+
+static struct ps_ * maybe_alloc_ps_(struct afs_ctx * c, int * was_init_out)
+{
+    struct ps_ * ps = ps_get_(c, -1);
+    if (ps != NULL) { /* reuse free proc */
+        if (ps->p.st == proc_st_uninit_) {
+            enum afs_res r = proc_init_(&ps->p);
+            *was_init_out = 0;
+            if (r != afs_ok) {
+                memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+                /* ps->fd is still -1; will find the same one as ps_get_(-1) */
+                (void) ps_del_(c, -1);
+                return NULL;
+            }
+        } else {
+            *was_init_out = 1;
+        }
+        ps->fd = ps_next_fd_(c);
+        return ps;
+    } else {
+        enum afs_res r;
+        ps = ps_add_(c);
+        if (ps == NULL) {
+            return NULL;
+        }
+        *was_init_out = 0;
+        r = proc_init_(&ps->p);
+        if (r != afs_ok) {
+            memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+            (void) ps_del_(c, ps->fd);
+            return NULL;
+        }
+        return ps;
+    }
 }
 
 static struct ps_ * ps_add_(struct afs_ctx * c)
@@ -563,6 +647,7 @@ static struct ps_ * ps_add_(struct afs_ctx * c)
     struct ps_ * parent = c->ps;
     struct ps_ * ps = malloc(sizeof(struct ps_));
     if (ps == NULL) {
+        SOB_AFS_FAIL_("malloc ps");
         return NULL;
     }
     ps_len++;
@@ -571,6 +656,7 @@ static struct ps_ * ps_add_(struct afs_ctx * c)
         size_t new_pfds_len = ps_len + evs_pfds_prealloc_len_;
         struct pollfd * new_pfds = malloc(sizeof(struct pollfd) * new_pfds_len);
         if (new_pfds == NULL) {
+            SOB_AFS_FAIL_("malloc pfds");
             free(ps);
             return NULL;
         }
@@ -583,6 +669,7 @@ static struct ps_ * ps_add_(struct afs_ctx * c)
              (ps_len + evs_pfds_prealloc_len_) * proc_evs_maxlen_;
         struct afs_ev * new_evs = malloc(sizeof(struct afs_ev) * new_evs_len);
         if (new_evs == NULL) {
+            SOB_AFS_FAIL_("malloc evs");
             free(ps);
             return NULL;
         }
@@ -593,7 +680,7 @@ static struct ps_ * ps_add_(struct afs_ctx * c)
 
     ps->fd = ps_next_fd_(c);
     ps->next = NULL;
-    ps->should_open_after_init = 0;
+    ps->cmd_after_init = proc_cmd_none_;
     ps->is_avail = 0;
     if (parent != NULL) {
         while (parent->next != NULL) {
@@ -624,6 +711,7 @@ static enum afs_res ps_del_(struct afs_ctx * c, int fd)
         parent = ps;
         ps = ps->next;
     }
+    SOB_AFS_FAIL_("fd not found (no errno)");
     return afs_fail_bad_fd;
 }
 
@@ -760,6 +848,11 @@ static enum afs_res proc_readall_(struct proc_ * p)
     return proc_send_cmd_(p, proc_cmd_readall_);
 }
 
+static enum afs_res proc_mkdir_(struct proc_ * p)
+{
+    return proc_send_cmd_(p, proc_cmd_mkdir_);
+}
+
 static enum afs_res proc_update_(struct proc_ * p,
     const struct pollfd * fds, size_t fds_len)
 {
@@ -790,6 +883,7 @@ static enum afs_res proc_update_(struct proc_ * p,
             p->is_stop_req = 0;
             SOB_AFS_PROC_CHECK_EV_(proc_add_ev_(p, afs_ev_stop));
         }
+        SOB_AFS_PROC_FAIL_("uninit (no errno)");
         return afs_fail; /* child is terminated, nothing will work */
     };
     SOB_PANIC("unreacheable");
@@ -929,9 +1023,13 @@ static enum afs_res proc_update_busy_(struct proc_ * p, short revents)
                     ev->d.readall.len = p->shared->read_len;
                     ev->d.readall.data = p->rw_buf;
                     break;
+                case proc_cmd_mkdir_:
+                    ev->ty = afs_ev_mkdir;
+                    break;
             };
             p->shared->cmd = proc_cmd_none_;
         } else {
+            memcpy(&p->fail, &p->shared->fail, sizeof(struct sob_fail));
             /* gotta watch out for proc_cmd_exit_ so that it never fails */
             /* child is still intact so it's not afs_fail */
             SOB_AFS_PROC_CHECK_EV_(
@@ -1089,6 +1187,9 @@ static int proc_child_worker_(int parent_fd,
         case proc_cmd_readall_:
             s->res = proc_child_readall_(s, fd, rw_buf, rw_buf_len);
             break;
+        case proc_cmd_mkdir_:
+            s->res = proc_child_mkdir_(s, rw_buf, rw_buf_len);
+            break;
         };
 
         s->st = proc_child_st_idle_;
@@ -1215,6 +1316,69 @@ static enum proc_res_ proc_child_readall_(struct proc_shared_ * s, int fd,
     }
 }
 
+static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
+    void * rw_buf, size_t rw_buf_len)
+{
+    int dirfd;
+    int openflags;
+    char * parent;
+
+    if (mkdir(rw_buf, 00700) != 0) {
+        if (errno == EEXIST) {
+            struct stat dstat;
+            if (stat(rw_buf, &dstat) != 0) {
+                SOB_AFS_PROC_C_FAIL_("stat after EEXIST");
+                return proc_res_fail_;
+            }
+            if ((dstat.st_mode & S_IFMT) != S_IFDIR) {
+                SOB_AFS_PROC_C_FAIL_("file with same name as dir (no errno)");
+                return proc_res_fail_;
+            } else {
+                return proc_res_ok_;
+            }
+        } else {
+            SOB_AFS_PROC_C_FAIL_("mkdir");
+            return proc_res_fail_;
+        }
+    }
+
+    openflags = O_RDONLY;
+#ifdef O_DIRECTORY
+    openflags |= O_DIRECTORY;
+#endif
+    /* XXX: unsure if necessary to fsync the dir itself */
+    dirfd = open(rw_buf, openflags); 
+    if (dirfd == -1) {
+        SOB_AFS_PROC_C_FAIL_("open dir");
+        return proc_res_fail_;
+    }
+    if (fsync(dirfd) != 0) {
+        close(dirfd);
+        SOB_AFS_PROC_C_FAIL_("fsync dir");
+        return proc_res_fail_;
+    }
+    close(dirfd);
+
+    parent = realpath(rw_buf, NULL);
+    if (parent == NULL) {
+        SOB_AFS_PROC_C_FAIL_("realpath");
+        return proc_res_fail_;
+    }
+    dirfd = open(parent, openflags); 
+    free(parent);
+    if (dirfd == -1) {
+        SOB_AFS_PROC_C_FAIL_("open dir");
+        return proc_res_fail_;
+    }
+    if (fsync(dirfd) != 0) {
+        close(dirfd);
+        SOB_AFS_PROC_C_FAIL_("fsync dir");
+        return proc_res_fail_;
+    }
+    close(dirfd);
+    return proc_res_ok_;
+}
+
 static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd)
 {
     switch (cmd) {
@@ -1232,6 +1396,8 @@ static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd)
         return afs_ev_write_fail;
     case proc_cmd_readall_:
         return afs_ev_readall_fail;
+    case proc_cmd_mkdir_:
+        return afs_ev_mkdir_fail;
     };
     SOB_PANIC("unreacheable");
     return afs_ev_init_fail;
@@ -1247,10 +1413,20 @@ static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd)
 
 #include <stdio.h>
 
+#define SOB_AFS_DEMO_PRINT_FAIL_(c) \
+    do { \
+        struct sob_fail * SOB_AFS_DEMO_PRINT_FAIL_fail_ = afs_get_fail(c); \
+        fprintf(stderr, "fail: %s:%i: %s (%s)\n", \
+            SOB_AFS_DEMO_PRINT_FAIL_fail_->file, \
+            SOB_AFS_DEMO_PRINT_FAIL_fail_->line, \
+            SOB_AFS_DEMO_PRINT_FAIL_fail_->msg, \
+            strerror(SOB_AFS_DEMO_PRINT_FAIL_fail_->the_errno)); \
+    } while (0)
 #define SOB_AFS_DEMO_CHECK_(stmt) \
     do { \
         enum afs_res SOB_AFS_DEMO_CHECK_res_ = (stmt); \
         if (SOB_AFS_DEMO_CHECK_res_ != afs_ok) { \
+            SOB_AFS_DEMO_PRINT_FAIL_(c); \
             SOB_PANIC("fail %i @ '%s'", SOB_AFS_DEMO_CHECK_res_, #stmt); \
         } \
     } while (0)
@@ -1282,6 +1458,7 @@ static ssize_t update_(int line, struct afs_ctx * c, struct afs_ev ** evs_out)
                     }
                 }
                 if (is_fail) {
+                    SOB_AFS_DEMO_PRINT_FAIL_(c);
                     SOB_PANIC("fail; line %i", line);
                 }
                 return evs_len;
@@ -1327,6 +1504,7 @@ int main(int argc, char ** argv) {
     const char * path_b;
     int fd_a;
     int fd_b;
+    int mkdir_fd;
     struct afs_ctx c_;
     struct afs_ctx * c = &c_;
     struct afs_ev evs[10];
@@ -1344,12 +1522,15 @@ int main(int argc, char ** argv) {
     afs_init(c);
 
     SOB_AFS_DEMO_CHECK_(
+        afs_mkdir(c, "/tmp/SOB_AFS_DEMO", &mkdir_fd));
+    SOB_AFS_DEMO_CHECK_(
         afs_open(c, path_a, O_RDONLY | O_NOCTTY, &fd_a));
     SOB_AFS_DEMO_CHECK_(
         afs_open(c, path_b, O_RDWR | O_CREAT | O_NOCTTY, &fd_b));
     evs[0].ty = afs_ev_open;
     evs[1].ty = afs_ev_open;
-    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 2);
+    evs[2].ty = afs_ev_mkdir;
+    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 3);
 
     while (1) {
         SOB_AFS_DEMO_CHECK_(afs_readall(c, fd_a));
@@ -1393,6 +1574,7 @@ int main(int argc, char ** argv) {
 #undef SOB_AFS_DEMO_CHECK_
 #undef SOB_AFS_DEMO_WAIT_EVS_
 #undef SOB_AFS_DEMO_WAIT_EV_
+#undef SOB_AFS_DEMO_PRINT_FAIL_
 
 #endif /* SOB_AFS_DEMO */
 
