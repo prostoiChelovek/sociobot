@@ -20,7 +20,7 @@ struct afs_ev {
     int fd;
     union {
         struct {
-            size_t len;
+            size_t len; /* always equal to requested if not fail */
         } write;
         struct {
             size_t len;
@@ -1276,7 +1276,7 @@ static enum proc_res_ proc_child_write_(struct proc_shared_ * s, int fd,
         s->written = 0;
         while (1) {
             ssize_t written = write(fd, write_buf, write_len);
-            if (written <= write_len) {
+            if (written == write_len) {
                 s->written = written;
                 return proc_res_ok_;
             } else if (written != -1) { /* interrupted */
