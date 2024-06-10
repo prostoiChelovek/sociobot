@@ -319,13 +319,17 @@ void afs_update(struct afs_ctx * c,
 enum afs_res afs_get_rw_buf(struct afs_ctx * c,
     int fd_from_afs, void ** buf_out, size_t * len_out)
 {
-    struct ps_ * ps = ps_get_(c, fd_from_afs);
-    if (ps == NULL || ! ps->is_avail) {
+    if (fd_from_afs != -1) {
+        struct ps_ * ps = ps_get_(c, fd_from_afs);
+        if (ps == NULL || ! ps->is_avail) {
+            return afs_fail_bad_fd;
+        }
+        *buf_out = ps->p.rw_buf;
+        *len_out = ps->p.rw_buf_len;
+        return afs_ok;
+    } else {
         return afs_fail_bad_fd;
     }
-    *buf_out = ps->p.rw_buf;
-    *len_out = ps->p.rw_buf_len;
-    return afs_ok;
 }
 
 enum afs_res afs_open(struct afs_ctx * c,
@@ -365,46 +369,62 @@ enum afs_res afs_open(struct afs_ctx * c,
 
 enum afs_res afs_close(struct afs_ctx * c, int fd_from_afs)
 {
-    struct ps_ * ps = ps_get_(c, fd_from_afs);
-    if (ps == NULL || ! ps->is_avail) {
-        SOB_AFS_FAIL_("bad fd (no errno)");
+    if (fd_from_afs != -1) {
+        struct ps_ * ps = ps_get_(c, fd_from_afs);
+        if (ps == NULL || ! ps->is_avail) {
+            SOB_AFS_FAIL_("bad fd (no errno)");
+            return afs_fail_bad_fd;
+        }
+        return proc_close_(&ps->p);
+    } else {
         return afs_fail_bad_fd;
     }
-    return proc_close_(&ps->p);
 }
 
 enum afs_res afs_fsync(struct afs_ctx * c, int fd_from_afs)
 {
-    struct ps_ * ps = ps_get_(c, fd_from_afs);
-    if (ps == NULL || ! ps->is_avail) {
-        SOB_AFS_FAIL_("bad fd (no errno)");
+    if (fd_from_afs != -1) {
+        struct ps_ * ps = ps_get_(c, fd_from_afs);
+        if (ps == NULL || ! ps->is_avail) {
+            SOB_AFS_FAIL_("bad fd (no errno)");
+            return afs_fail_bad_fd;
+        }
+        return proc_fsync_(&ps->p);
+    } else {
         return afs_fail_bad_fd;
     }
-    return proc_fsync_(&ps->p);
 }
 
 enum afs_res afs_write(struct afs_ctx * c, int fd_from_afs, size_t len)
 {
-    struct ps_ * ps = ps_get_(c, fd_from_afs);
-    if (ps == NULL || ! ps->is_avail) {
-        SOB_AFS_FAIL_("bad fd (no errno)");
+    if (fd_from_afs != -1) {
+        struct ps_ * ps = ps_get_(c, fd_from_afs);
+        if (ps == NULL || ! ps->is_avail) {
+            SOB_AFS_FAIL_("bad fd (no errno)");
+            return afs_fail_bad_fd;
+        }
+        if (ps->p.shared == NULL) {
+            SOB_AFS_FAIL_("shared is NULL (no errno)");
+            return afs_fail;
+        }
+        ps->p.shared->write_len = len;
+        return proc_write_(&ps->p);
+    } else {
         return afs_fail_bad_fd;
     }
-    if (ps->p.shared == NULL) {
-        SOB_AFS_FAIL_("shared is NULL (no errno)");
-        return afs_fail;
-    }
-    ps->p.shared->write_len = len;
-    return proc_write_(&ps->p);
 }
 
 enum afs_res afs_readall(struct afs_ctx * c, int fd_from_afs)
 {
-    struct ps_ * ps = ps_get_(c, fd_from_afs);
-    if (ps == NULL || ! ps->is_avail) {
+    if (fd_from_afs != -1) {
+        struct ps_ * ps = ps_get_(c, fd_from_afs);
+        if (ps == NULL || ! ps->is_avail) {
+            return afs_fail_bad_fd;
+        }
+        return proc_readall_(&ps->p);
+    } else {
         return afs_fail_bad_fd;
     }
-    return proc_readall_(&ps->p);
 }
 
 enum afs_res afs_mkdir(struct afs_ctx * c, const char * path, int * afs_fd_out)
