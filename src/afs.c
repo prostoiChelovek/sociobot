@@ -1301,7 +1301,7 @@ static enum proc_res_ proc_child_write_(struct proc_shared_ * s, int fd,
         while (1) {
             ssize_t written = write(fd, write_buf, write_len);
             if (written == write_len) {
-                s->written = written;
+                s->written += written;
                 return proc_res_ok_;
             } else if (written != -1) { /* interrupted */
                 write_buf += written;
