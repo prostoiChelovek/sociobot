@@ -407,6 +407,10 @@ enum afs_res afs_write(struct afs_ctx * c, int fd_from_afs, size_t len)
             SOB_AFS_FAIL_("shared is NULL (no errno)");
             return afs_fail;
         }
+        if (len > ps->p.rw_buf_len) {
+            SOB_AFS_FAIL_("write len out of bounds (no errno)");
+            return afs_fail_bad_arg;
+        }
         ps->p.shared->write_len = len;
         return proc_write_(&ps->p);
     } else {
