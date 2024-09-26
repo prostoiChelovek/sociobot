@@ -1370,11 +1370,8 @@ static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
 #ifdef O_DIRECTORY
     openflags |= O_DIRECTORY;
 #endif
-#ifdef O_PATH
-    openflags |= O_PATH;
-#endif
     /* XXX: unsure if necessary to fsync the dir itself */
-    dirfd = open(rw_buf, openflags); 
+    dirfd = open(rw_buf, openflags);
     if (dirfd == -1) {
         SOB_AFS_PROC_C_FAIL_("open dir");
         return proc_res_fail_;
@@ -1391,7 +1388,7 @@ static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
         SOB_AFS_PROC_C_FAIL_("realpath");
         return proc_res_fail_;
     }
-    dirfd = open(parent, openflags); 
+    dirfd = open(parent, openflags);
     free(parent);
     if (dirfd == -1) {
         SOB_AFS_PROC_C_FAIL_("open dir");
