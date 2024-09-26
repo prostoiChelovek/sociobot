@@ -21,7 +21,7 @@ struct afs_ev {
     union {
         struct {
             size_t len; /* always equal to requested if not fail */
-        } write;
+        } write; /* also used for write_fsync_close */
         struct {
             size_t len;
             const char * data;
@@ -37,7 +37,8 @@ enum proc_cmd_ {
     proc_cmd_fsync_,
     proc_cmd_write_,
     proc_cmd_readall_,
-    proc_cmd_mkdir_
+    proc_cmd_mkdir_,
+    proc_cmd_write_fsync_close_
 };
 enum proc_res_ {
     proc_res_none_ = 0,
@@ -65,7 +66,7 @@ struct proc_shared_ {
 
 enum {
     /* best guess; remember that page size on a different target may differ */
-    rw_buf_len_ = PAGESIZE * 2 - sizeof(struct proc_shared_),
+    rw_buf_len_ = PAGESIZE * 3 - sizeof(struct proc_shared_),
     proc_evs_maxlen_ = 3,
     evs_pfds_prealloc_len_ = 2,
 };
@@ -147,6 +148,7 @@ static enum afs_res proc_fsync_(struct proc_ * p);
 static enum afs_res proc_write_(struct proc_ * p);
 static enum afs_res proc_readall_(struct proc_ * p);
 static enum afs_res proc_mkdir_(struct proc_ * p);
+static enum afs_res proc_write_fsync_close_(struct proc_ * p);
 
 static enum afs_res proc_update_init_pend_(struct proc_ * p, short revents);
 static enum afs_res proc_update_busy_(struct proc_ * p, short revents);
@@ -169,6 +171,8 @@ static enum proc_res_ proc_child_write_(struct proc_shared_ * s, int fd,
 static enum proc_res_ proc_child_readall_(struct proc_shared_ * s, int fd,
     void * rw_buf, size_t rw_buf_len);
 static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
+    void * rw_buf, size_t rw_buf_len);
+static enum proc_res_ proc_child_write_fsync_close_(struct proc_shared_ * s,
     void * rw_buf, size_t rw_buf_len);
 
 static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd);
@@ -239,6 +243,14 @@ void afs_update(struct afs_ctx * c,
                         oev->ty = afs_ev_mkdir_fail;
                         SOB_AFS_UPD_ADD_EV_();
                     }
+                } else if (ps->cmd_after_init == proc_cmd_write_fsync_close_) {
+                    enum afs_res ores = proc_write_fsync_close_(&ps->p);
+                    if (ores != afs_ok) {
+                        memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+                        oev->fd = evs->fd;
+                        oev->ty = afs_ev_write_fsync_close_fail;
+                        SOB_AFS_UPD_ADD_EV_();
+                    }
                 } else if (ps->cmd_after_init != proc_cmd_none_) {
                     oev->fd = evs->fd;
                     oev->ty = proc_cmd_fail_ev_(ps->cmd_after_init);
@@ -265,6 +277,8 @@ void afs_update(struct afs_ctx * c,
                 break;
             case afs_ev_mkdir_fail:
             case afs_ev_mkdir:
+            case afs_ev_write_fsync_close:
+            case afs_ev_write_fsync_close_fail:
                 should_add_ev = 1;
                 ps->fd = -1;
                 break;
@@ -321,13 +335,15 @@ enum afs_res afs_get_rw_buf(struct afs_ctx * c,
 {
     if (fd_from_afs != -1) {
         struct ps_ * ps = ps_get_(c, fd_from_afs);
-        if (ps == NULL || ! ps->is_avail) {
+        if (ps == NULL) {
+            SOB_AFS_FAIL_("fd not found (no errno)");
             return afs_fail_bad_fd;
         }
         *buf_out = ps->p.rw_buf;
         *len_out = ps->p.rw_buf_len;
         return afs_ok;
     } else {
+        SOB_AFS_FAIL_("bad fd (no errno)");
         return afs_fail_bad_fd;
     }
 }
@@ -464,6 +480,62 @@ enum afs_res afs_mkdir(struct afs_ctx * c, const char * path, int * afs_fd_out)
     }
 }
 
+enum afs_res afs_reserve(struct afs_ctx * c, int * afs_fd_out)
+{
+    int was_init;
+    struct ps_ * ps = maybe_alloc_ps_(c, &was_init);
+    (void) was_init;
+    if (ps != NULL) {
+        *afs_fd_out = ps->fd;
+        return afs_ok;
+    } else {
+        return afs_fail_alloc;
+    }
+}
+
+enum afs_res afs_write_fsync_close(struct afs_ctx * c,
+    int fd_from_afs,
+    const char * path, int flags, size_t write_len)
+{
+    struct ps_ * ps;
+    size_t path_len;
+    if (fd_from_afs == -1) {
+        SOB_AFS_FAIL_("bad fd (no errno)");
+        return afs_fail_bad_fd;
+    }
+    ps = ps_get_(c, fd_from_afs);
+    if (ps == NULL) {
+        SOB_AFS_FAIL_("fd not found (no errno)");
+        return afs_fail_bad_fd;
+    }
+    if (ps->p.shared == NULL || ps->p.rw_buf == NULL) {
+        SOB_AFS_FAIL_("shared or rw_buf is NULL (no errno)");
+        return afs_fail;
+    }
+    path_len = strlen(path) + 1;
+    if (write_len + path_len <= ps->p.rw_buf_len) {
+        ps->p.shared->open_flags = flags;
+        ps->p.shared->write_len = write_len;
+        memcpy((char *) ps->p.rw_buf + write_len, path, path_len);
+        if (ps->p.st == proc_st_avail_) {
+            enum afs_res r = proc_write_fsync_close_(&ps->p);
+            memcpy(&c->fail, &ps->p.fail, sizeof(struct sob_fail));
+            return r;
+        } else if (ps->p.st == proc_st_uninit_
+                || ps->p.st == proc_st_init_pend_) {
+            ps->is_avail = 0;
+            ps->cmd_after_init = proc_cmd_write_fsync_close_;
+            return afs_ok;
+        } else {
+            SOB_AFS_FAIL_("proc busy or dead (no errno)");
+            return afs_fail;
+        }
+    } else {
+        SOB_AFS_FAIL_("write len and path don't fit in the buf (no errno)");
+        return afs_fail_bad_arg;
+    }
+}
+
 enum afs_res afs_stop_prep(struct afs_ctx * c)
 {
     if (! c->is_stop_req) {
@@ -561,6 +633,7 @@ int afs_ev_is_fail(const struct afs_ev * ev)
     case afs_ev_write_fail:
     case afs_ev_readall_fail:
     case afs_ev_mkdir_fail:
+    case afs_ev_write_fsync_close_fail:
         return 1;
     case afs_ev_init:
     case afs_ev_stop:
@@ -570,6 +643,7 @@ int afs_ev_is_fail(const struct afs_ev * ev)
     case afs_ev_write:
     case afs_ev_readall:
     case afs_ev_mkdir:
+    case afs_ev_write_fsync_close:
         return 0;
     }
     SOB_PANIC("unreacheable");
@@ -626,6 +700,10 @@ const char * afs_event_str(enum afs_event event)
         return "afs_ev_mkdir";
     case afs_ev_mkdir_fail:
         return "afs_ev_mkdir_fail";
+    case afs_ev_write_fsync_close:
+        return "afs_ev_write_fsync_close";
+    case afs_ev_write_fsync_close_fail:
+        return "afs_ev_write_fsync_close_fail";
     }
     return "";
 }
@@ -877,6 +955,11 @@ static enum afs_res proc_mkdir_(struct proc_ * p)
     return proc_send_cmd_(p, proc_cmd_mkdir_);
 }
 
+static enum afs_res proc_write_fsync_close_(struct proc_ * p)
+{
+    return proc_send_cmd_(p, proc_cmd_write_fsync_close_);
+}
+
 static enum afs_res proc_update_(struct proc_ * p,
     const struct pollfd * fds, size_t fds_len)
 {
@@ -1050,6 +1133,10 @@ static enum afs_res proc_update_busy_(struct proc_ * p, short revents)
                 case proc_cmd_mkdir_:
                     ev->ty = afs_ev_mkdir;
                     break;
+                case proc_cmd_write_fsync_close_:
+                    ev->ty = afs_ev_write_fsync_close;
+                    ev->d.write.len = p->shared->written;
+                    break;
             };
             p->shared->cmd = proc_cmd_none_;
         } else {
@@ -1213,6 +1300,9 @@ static int proc_child_worker_(int parent_fd,
             break;
         case proc_cmd_mkdir_:
             s->res = proc_child_mkdir_(s, rw_buf, rw_buf_len);
+            break;
+        case proc_cmd_write_fsync_close_:
+            s->res = proc_child_write_fsync_close_(s, rw_buf, rw_buf_len);
             break;
         };
 
@@ -1403,6 +1493,53 @@ static enum proc_res_ proc_child_mkdir_(struct proc_shared_ * s,
     return proc_res_ok_;
 }
 
+static enum proc_res_ proc_child_write_fsync_close_(struct proc_shared_ * s,
+    void * rw_buf, size_t rw_buf_len)
+{
+    const char * write_buf = rw_buf;
+    size_t write_len = s->write_len;
+    int fd;
+    s->written = 0;
+
+    fd = open((const char *) rw_buf + write_len, s->open_flags, 00600);
+    if (fd == -1) {
+        SOB_AFS_PROC_C_FAIL_("open");
+        return proc_res_fail_;
+    }
+
+    /* exits only after all data was written */
+    while (1) {
+        ssize_t written = write(fd, write_buf, write_len);
+        if (written == write_len) {
+            s->written += written;
+            break;
+        } else if (written != -1) { /* interrupted */
+            write_buf += written;
+            write_len -= written;
+            s->written += written;
+            continue;
+        } else {
+            if (errno == EINTR) {
+                continue; /* no data was written */
+            } else {
+                SOB_AFS_PROC_C_FAIL_("write");
+                close(fd);
+                return proc_res_fail_;
+            }
+        }
+    }
+
+    if (fsync(fd) == -1) {
+        close(fd);
+        SOB_AFS_PROC_C_FAIL_("fsync");
+        return proc_res_fail_;
+    }
+
+    close(fd);
+
+    return proc_res_ok_;
+}
+
 static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd)
 {
     switch (cmd) {
@@ -1422,6 +1559,8 @@ static enum afs_event proc_cmd_fail_ev_(enum proc_cmd_ cmd)
         return afs_ev_readall_fail;
     case proc_cmd_mkdir_:
         return afs_ev_mkdir_fail;
+    case proc_cmd_write_fsync_close_:
+        return afs_ev_write_fsync_close_fail;
     };
     SOB_PANIC("unreacheable");
     return afs_ev_init_fail;
@@ -1529,12 +1668,16 @@ int main(int argc, char ** argv) {
     int fd_a;
     int fd_b;
     int mkdir_fd;
+    int fd_write;
     struct afs_ctx c_;
     struct afs_ctx * c = &c_;
     struct afs_ev evs[10];
     void * b_rw_buf = NULL;
     size_t b_rw_buf_len = 0;
+    void * write_rw_buf = NULL;
+    size_t write_rw_buf_len = 0;
     int should_wait_write = 0;
+    const char write_str[] = "Hello, world!\n";
 
     if (argc != 3) {
         fprintf(stderr, "pass source path and dest path\n");
@@ -1584,11 +1727,25 @@ int main(int argc, char ** argv) {
 
     SOB_AFS_DEMO_CHECK_(afs_close(c, fd_a));
     SOB_AFS_DEMO_CHECK_(afs_close(c, fd_b));
-    SOB_AFS_DEMO_CHECK_(afs_stop_prep(c));
     evs[0].ty = afs_ev_close;
     evs[1].ty = afs_ev_close;
-    evs[2].ty = afs_ev_stop;
-    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 3);
+    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 2);
+
+    SOB_AFS_DEMO_CHECK_(afs_reserve(c, &fd_write));
+    SOB_AFS_DEMO_CHECK_(
+        afs_get_rw_buf(c, fd_write, &write_rw_buf, &write_rw_buf_len));
+    memcpy(write_rw_buf, write_str, sizeof(write_str) - 1);
+    SOB_AFS_DEMO_CHECK_(
+        afs_write_fsync_close(
+            c, fd_write,
+            "/tmp/SOB_AFS_DEMO/hello.txt", O_RDWR | O_CREAT | O_NOCTTY,
+            sizeof(write_str) - 1));
+    evs[0].ty = afs_ev_write_fsync_close;
+    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 1);
+
+    SOB_AFS_DEMO_CHECK_(afs_stop_prep(c));
+    evs[0].ty = afs_ev_stop;
+    SOB_AFS_DEMO_WAIT_EVS_(c, evs, 1);
 
     SOB_AFS_DEMO_CHECK_(afs_stop(c));
 
